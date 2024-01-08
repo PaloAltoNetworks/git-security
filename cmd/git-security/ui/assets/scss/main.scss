@@ -1,0 +1,15 @@
+@use "element-plus/theme-chalk/src/dark/css-vars.scss" as *;
+
+#__nuxt {
+    font-family: 'Montserrat';
+    margin: 0 auto;
+    padding: 1rem;
+}
+
+.selected-row {
+    background-color: var(--el-color-primary-light-7) !important;
+}
+
+.zebra {
+    background-color: var(--el-color-info-light-9) !important;
+}

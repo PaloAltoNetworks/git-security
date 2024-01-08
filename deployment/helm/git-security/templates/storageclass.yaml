@@ -1,0 +1,13 @@
+# StorageClass example for GKE
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "false"
+  name: git-security
+parameters:
+  type: pd-ssd
+provisioner: pd.csi.storage.gke.io
+allowVolumeExpansion: true
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer

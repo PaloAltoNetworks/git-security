@@ -1,0 +1,40 @@
+image:
+  repository: matthewkwong/git-security
+  pullPolicy: Always
+  tag: "latest"
+
+dindImage:
+  repository: docker
+  pullPolicy: Always
+  tag: "23-dind"
+
+mongoImage:
+  repository: mongo
+  pullPolicy: Always
+  tag: "6.0.13"
+
+nameOverride: ""
+fullnameOverride: ""
+
+resources:
+  limits:
+    cpu: 1
+    memory: 1Gi
+  requests:
+    cpu: 500m
+    memory: 500Mi
+
+dbresources:
+  limits:
+    cpu: 1
+    memory: 1Gi
+  requests:
+    cpu: 500m
+    memory: 500Mi
+
+envs:
+  GITHUB_HOST: <GitHub Enterprise Host>
+  GIT_SECURITY_ADMIN_USERNAME: <UI admin username>
+  GIT_SECURITY_ADMIN_PASSWORD: <UI admin password>
+  GIT_SECURITY_KEY: <Key for encrypting the env value in custom hooks>
+  GH_TOKEN: <GitHub token to access the APIs>
