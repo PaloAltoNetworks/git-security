@@ -2,11 +2,13 @@ package service
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"log/slog"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/IGLOU-EU/go-wildcard/v2"
 	"github.com/docker/docker/api/types"
@@ -73,25 +75,29 @@ func (app *GitSecurityApp) runCustom() error {
 				var result interface{}
 				if wildcard.Match(p, repo.NameWithOwner) {
 					// do custom logic
-					envs := custom.Envs
-					if envs == nil {
-						envs = make([]config.EnvKeyValue, 0)
+					// add envs + decrypt
+					envs := []config.EnvKeyValue{
+						{
+							Key:   "GIT_REPO",
+							Value: repo.NameWithOwner,
+						},
 					}
-
-					// decrypt
-					for idx := range customs {
-						for idy := range customs[idx].Envs {
-							customs[idx].Envs[idy].Value, err = security.Decrypt(customs[idx].Envs[idy].Value, app.key)
-							if err != nil {
-								return err
-							}
+					for _, e := range custom.Envs {
+						v, err := security.Decrypt(e.Value, app.key)
+						if err != nil {
+							slog.Error(
+								"error in security.Decrypt()",
+								slog.String("error", err.Error()),
+								slog.String("encrypted", e.Value),
+							)
+							return err
 						}
+						envs = append(envs, config.EnvKeyValue{
+							Key:   e.Key,
+							Value: v,
+						})
 					}
 
-					envs = append(envs, config.EnvKeyValue{
-						Key:   "GIT_REPO",
-						Value: repo.NameWithOwner,
-					})
 					result, err = app.runSingleCustom(custom.Image, custom.Command, envs)
 					if err != nil {
 						slog.Error("error in runSingleCustom()", slog.String("error", err.Error()))
@@ -167,17 +173,24 @@ func (app *GitSecurityApp) runSingleCustom(image, command string, envs []config.
 	}
 
 	e := make([]string, 0)
+	masked := make([]string, 0)
 	for _, ekv := range envs {
 		k := strings.TrimSpace(ekv.Key)
 		if k != "" {
 			e = append(e, fmt.Sprintf("%s=%s", k, ekv.Value))
+			if k != "GIT_REPO" {
+				masked = append(masked,
+					fmt.Sprintf("%s=%s", k, strings.Repeat("*", utf8.RuneCountInString(ekv.Value))))
+			} else {
+				masked = append(masked, fmt.Sprintf("%s=%s", k, ekv.Value))
+			}
 		}
 	}
 
 	slog.Debug("custom: create container",
 		slog.String("image", image),
 		slog.Any("Cmd", c),
-		slog.Any("Env", e),
+		slog.Any("Env", masked),
 	)
 	resp, err := cli.ContainerCreate(app.ctx, &container.Config{
 		Image: image,
@@ -244,7 +257,10 @@ func (app *GitSecurityApp) runSingleCustom(image, command string, envs []config.
 		return "", err
 	}
 
-	sc := bufio.NewScanner(out)
+	buf := new(bytes.Buffer)
+	buf.ReadFrom(out)
+
+	sc := bufio.NewScanner(buf)
 	var line string
 	for sc.Scan() {
 		line = sc.Text()
@@ -253,5 +269,10 @@ func (app *GitSecurityApp) runSingleCustom(image, command string, envs []config.
 		slog.Error("error in Scan()", slog.String("error", err.Error()))
 		return "", err
 	}
+
+	slog.Debug("container output",
+		slog.String("output", buf.String()),
+		slog.String("last line", line),
+	)
 	return line, nil
 }
