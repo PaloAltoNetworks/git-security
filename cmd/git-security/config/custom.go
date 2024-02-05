@@ -18,4 +18,5 @@ type Custom struct {
 	DefaultValue interface{}        `bson:"default_value" json:"default_value"`
 	ErrorValue   interface{}        `bson:"error_value" json:"error_value"`
 	Enabled      bool               `bson:"enabled" json:"enabled"`
+	BatchMode    bool               `bson:"batch_mode" json:"batch_mode"`
 }

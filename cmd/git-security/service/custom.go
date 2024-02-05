@@ -3,6 +3,7 @@ package service
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -53,6 +54,8 @@ func (app *GitSecurityApp) runCustom() error {
 	}
 	cursor.Close(app.ctx)
 
+	// need a map of results for batch mode custom hooks
+	batchedResults := make(map[string]map[string]interface{})
 	for _, repo := range repos {
 		cursorCustom, err := app.db.Collection("customs").Find(app.ctx, bson.D{})
 		if err != nil {
@@ -66,22 +69,18 @@ func (app *GitSecurityApp) runCustom() error {
 		cursorCustom.Close(app.ctx)
 
 		for _, custom := range customs {
-			for _, p := range strings.Split(custom.Pattern, ",") {
-				// prereq check
-				if !custom.Enabled || len(p) == 0 || len(custom.Image) == 0 || len(custom.Command) == 0 || len(custom.Field) == 0 {
-					break
-				}
-				customRun := false
-				var result interface{}
-				if wildcard.Match(p, repo.NameWithOwner) {
-					// do custom logic
-					// add envs + decrypt
-					envs := []config.EnvKeyValue{
-						{
-							Key:   "GIT_REPO",
-							Value: repo.NameWithOwner,
-						},
-					}
+			// prereq check
+			if !custom.Enabled || len(custom.Image) == 0 || len(custom.Command) == 0 || len(custom.Field) == 0 {
+				continue
+			}
+
+			// if custom is batch mode, and we need to fetch the result only once
+			customHookID := getCustomHookID(&custom)
+			if custom.BatchMode {
+				if _, ok := batchedResults[customHookID]; !ok {
+					batchedResults[customHookID] = make(map[string]interface{})
+
+					envs := make([]config.EnvKeyValue, 0)
 					for _, e := range custom.Envs {
 						v, err := security.Decrypt(e.Value, app.key)
 						if err != nil {
@@ -98,12 +97,72 @@ func (app *GitSecurityApp) runCustom() error {
 						})
 					}
 
-					result, err = app.runSingleCustom(custom.Image, custom.Command, envs)
+					resultJSON, err := app.runSingleCustom(custom.Image, custom.Command, envs)
 					if err != nil {
 						slog.Error("error in runSingleCustom()", slog.String("error", err.Error()))
-						result = custom.ErrorValue
+						continue
 					}
-					customRun = true
+
+					var result map[string]interface{}
+					err = json.Unmarshal([]byte(resultJSON), &result)
+					if err != nil {
+						slog.Error("error in json.Unmarshal()", slog.String("error", err.Error()))
+						continue
+					}
+					batchedResults[customHookID] = result
+					slog.Info(
+						"batched custom hook repo count",
+						slog.Int("count", len(result)),
+						slog.String("field", custom.Field),
+					)
+				}
+			}
+
+			for _, p := range strings.Split(custom.Pattern, ",") {
+				p := strings.Trim(p, " ")
+				if len(p) == 0 {
+					break
+				}
+
+				var result interface{}
+				if wildcard.Match(p, repo.NameWithOwner) {
+					if custom.BatchMode {
+						if v, ok := batchedResults[customHookID][repo.NameWithOwner]; ok {
+							result = v
+						} else {
+							result = custom.DefaultValue
+						}
+					} else {
+						// do custom logic
+						// add envs + decrypt
+						envs := []config.EnvKeyValue{
+							{
+								Key:   "GIT_REPO",
+								Value: repo.NameWithOwner,
+							},
+						}
+						for _, e := range custom.Envs {
+							v, err := security.Decrypt(e.Value, app.key)
+							if err != nil {
+								slog.Error(
+									"error in security.Decrypt()",
+									slog.String("error", err.Error()),
+									slog.String("encrypted", e.Value),
+								)
+								return err
+							}
+							envs = append(envs, config.EnvKeyValue{
+								Key:   e.Key,
+								Value: v,
+							})
+						}
+
+						result, err = app.runSingleCustom(custom.Image, custom.Command, envs)
+						if err != nil {
+							slog.Error("error in runSingleCustom()", slog.String("error", err.Error()))
+							result = custom.ErrorValue
+						}
+					}
 				} else {
 					result = custom.DefaultValue
 				}
@@ -112,39 +171,44 @@ func (app *GitSecurityApp) runCustom() error {
 				if repo.Customs == nil {
 					repo.Customs = make(map[string]interface{})
 				}
+
 				switch custom.ValueType {
 				case "string":
 					r := cast.ToString(result)
-					if v, ok := repo.Customs[custom.Field]; !ok || cast.ToString(v) != r {
+					if v, ok := repo.Customs[custom.Field]; !ok || v != r {
 						hasUpdate = true
 						repo.Customs[custom.Field] = r
 					}
 				case "number":
+
+					if repo.NameWithOwner == "BAD-GCP/AppNotificationListener" {
+						fmt.Printf("%+v\n", repo.Customs[custom.Field])
+					}
 					r := cast.ToFloat64(result)
-					if v, ok := repo.Customs[custom.Field]; !ok || cast.ToFloat64(v) != r {
+					if v, ok := repo.Customs[custom.Field]; !ok || v != r {
 						hasUpdate = true
 						repo.Customs[custom.Field] = r
+						if repo.NameWithOwner == "BAD-GCP/AppNotificationListener" {
+							fmt.Printf("%+v\n", r)
+						}
 					}
-					repo.Customs[custom.Field] = cast.ToFloat64(result)
+
+					if repo.NameWithOwner == "BAD-GCP/AppNotificationListener" {
+						fmt.Printf("%+v\n", r)
+					}
 				case "boolean":
 					r := cast.ToBool(result)
-					if v, ok := repo.Customs[custom.Field]; !ok || cast.ToBool(v) != r {
+					if v, ok := repo.Customs[custom.Field]; !ok || v != r {
 						hasUpdate = true
 						repo.Customs[custom.Field] = r
 					}
-					repo.Customs[custom.Field] = cast.ToBool(result)
 				}
 
-				if hasUpdate || customRun {
+				if hasUpdate {
 					update := bson.D{{Key: "$set", Value: bson.D{
 						{Key: "customs", Value: repo.Customs},
+						{Key: "custom_run_at", Value: time.Now()},
 					}}}
-					if customRun {
-						update = bson.D{{Key: "$set", Value: bson.D{
-							{Key: "customs", Value: repo.Customs},
-							{Key: "custom_run_at", Value: time.Now()},
-						}}}
-					}
 					filter := bson.D{{Key: "id", Value: repo.ID}}
 					_, err = app.db.Collection("repositories").UpdateOne(app.ctx, filter, update)
 					if err != nil {
@@ -275,4 +339,8 @@ func (app *GitSecurityApp) runSingleCustom(image, command string, envs []config.
 		slog.String("last line", line),
 	)
 	return line, nil
+}
+
+func getCustomHookID(c *config.Custom) string {
+	return fmt.Sprintf("%s:%s:%s:%s", c.Field, c.Image, c.Command, c.Pattern)
 }

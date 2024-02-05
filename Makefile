@@ -68,7 +68,7 @@ image-amd64: ## Build container image
 .PHONY: env-image
 env-image: ## Build the demo env image
 	@echo "+ $@"
-	DOCKER_BUILDKIT=1 docker build \
+	docker build \
 		--no-cache \
 		-f build/git-security-env/Dockerfile \
 		-t git-security-env:latest build/git-security-env
@@ -76,7 +76,7 @@ env-image: ## Build the demo env image
 .PHONY: env-image-amd64
 env-image-amd64: ## Build the demo env image
 	@echo "+ $@"
-	DOCKER_BUILDKIT=1 docker buildx build \
+	docker buildx build \
 		--platform linux/amd64 \
 		--no-cache \
 		-f build/git-security-env/Dockerfile \

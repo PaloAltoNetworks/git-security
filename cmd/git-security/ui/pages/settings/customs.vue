@@ -15,6 +15,7 @@ type CustomConfig = {
   default_value: any
   error_value: any
   enabled: boolean
+  batch_mode: boolean
 }
 
 const customs = ref<CustomConfig[]>([])
@@ -178,6 +179,15 @@ onMounted(() => {
                    @change="customChanged(index)" />
       </div>
     </template>
+    <div>
+      <el-checkbox v-model="element.batch_mode"
+                   label="Batch Mode?"
+                   class="m-2"
+                   size="large"
+                   border
+                   @change="customChanged(index)" />
+    </div>
+
     <div>
       <el-input v-model="element.field"
                 class="w-30 m-2"
