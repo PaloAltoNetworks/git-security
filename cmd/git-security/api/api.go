@@ -64,6 +64,11 @@ func NewFiberApp(
 	v1.Post("/repos/:groupBy", a.GetRepositoriesGroupBy)
 	v1.Post("/repos/action/add-branch-protection-rule", a.AddBranchProtectionRule)
 	v1.Post("/repos/action/requires-pr", a.RequiresPR)
+	v1.Post("/repos/action/required-approving-review-count", a.RequiredApprovingReviewCount)
+	v1.Post("/repos/action/dismisses-stale-reviews", a.DismissesStaleReviews)
+	v1.Post("/repos/action/requires-conversation-resolution", a.RequiresConversationResolution)
+	v1.Post("/repos/action/allows-force-pushes", a.AllowsForcePushes)
+	v1.Post("/repos/action/allows-deletions", a.AllowsDeletions)
 	v1.Put("/column/:id", a.UpdateColumn)
 	v1.Put("/custom/:id", a.UpdateCustom)
 

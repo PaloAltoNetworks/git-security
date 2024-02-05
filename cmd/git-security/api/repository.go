@@ -206,7 +206,7 @@ func (a *api) AddBranchProtectionRule(c *fiber.Ctx) error {
 	return c.SendStatus(200)
 }
 
-func (a *api) RequiresPR(c *fiber.Ctx) error {
+func (a *api) updateBranchProtectionRule(c *fiber.Ctx, updateField string, updateValue interface{}) error {
 	b := struct {
 		IDs []string `json:"ids"`
 	}{}
@@ -233,8 +233,8 @@ func (a *api) RequiresPR(c *fiber.Ctx) error {
 		if repo.DefaultBranchRef.BranchProtectionRule.ID != "" {
 			if err := a.g.UpdateBranchProtectionRule(
 				repo.DefaultBranchRef.BranchProtectionRule.ID,
-				"RequiresApprovingReviews",
-				true,
+				updateField,
+				updateValue,
 			); err != nil {
 				slog.Error(
 					"error in CreateBranchProtectionRule",
@@ -256,4 +256,28 @@ func (a *api) RequiresPR(c *fiber.Ctx) error {
 		return errors.New("encountered error in CreateBranchProtectionRule")
 	}
 	return c.SendStatus(200)
+}
+
+func (a *api) RequiresPR(c *fiber.Ctx) error {
+	return a.updateBranchProtectionRule(c, "RequiresApprovingReviews", true)
+}
+
+func (a *api) RequiredApprovingReviewCount(c *fiber.Ctx) error {
+	return a.updateBranchProtectionRule(c, "RequiredApprovingReviewCount", 2)
+}
+
+func (a *api) DismissesStaleReviews(c *fiber.Ctx) error {
+	return a.updateBranchProtectionRule(c, "DismissesStaleReviews", true)
+}
+
+func (a *api) RequiresConversationResolution(c *fiber.Ctx) error {
+	return a.updateBranchProtectionRule(c, "RequiresConversationResolution", true)
+}
+
+func (a *api) AllowsForcePushes(c *fiber.Ctx) error {
+	return a.updateBranchProtectionRule(c, "AllowsForcePushes", false)
+}
+
+func (a *api) AllowsDeletions(c *fiber.Ctx) error {
+	return a.updateBranchProtectionRule(c, "AllowsDeletions", false)
 }

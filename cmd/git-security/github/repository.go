@@ -144,6 +144,26 @@ func (ghi *GitHubImpl) UpdateBranchProtectionRule(branchProtectionRuleID, field 
 		if v, ok := value.(bool); ok {
 			input.RequiresApprovingReviews = githubv4.NewBoolean(githubv4.Boolean(v))
 		}
+	case "RequiredApprovingReviewCount":
+		if v, ok := value.(int); ok {
+			input.RequiredApprovingReviewCount = githubv4.NewInt(githubv4.Int(v))
+		}
+	case "DismissesStaleReviews":
+		if v, ok := value.(bool); ok {
+			input.DismissesStaleReviews = githubv4.NewBoolean(githubv4.Boolean(v))
+		}
+	case "RequiresConversationResolution":
+		if v, ok := value.(bool); ok {
+			input.RequiresConversationResolution = githubv4.NewBoolean(githubv4.Boolean(v))
+		}
+	case "AllowsForcePushes":
+		if v, ok := value.(bool); ok {
+			input.AllowsForcePushes = githubv4.NewBoolean(githubv4.Boolean(v))
+		}
+	case "AllowsDeletions":
+		if v, ok := value.(bool); ok {
+			input.AllowsDeletions = githubv4.NewBoolean(githubv4.Boolean(v))
+		}
 	}
 
 	return ghi.gqlClient.Mutate(ghi.ctx, &m, input, nil)

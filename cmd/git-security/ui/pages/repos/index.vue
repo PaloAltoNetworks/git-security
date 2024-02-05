@@ -274,7 +274,37 @@ const actions = [
       label: 'Requires PR: enabled',
       click: () => actionAPI("/api/v1/repos/action/requires-pr")
     }
-  ]
+  ],
+  [
+    {
+      label: 'Requires Approving Review Count: 2',
+      click: () => actionAPI("/api/v1/repos/action/required-approving-review-count")
+    }
+  ],
+  [
+    {
+      label: 'Dismiss Stale Review: enabled',
+      click: () => actionAPI("/api/v1/repos/action/dismisses-stale-reviews")
+    }
+  ],
+  [
+    {
+      label: 'Requires Conversation Resolution: enabled',
+      click: () => actionAPI("/api/v1/repos/action/requires-conversation-resolution")
+    }
+  ],
+  [
+    {
+      label: 'Allow Force Pushes: disabled',
+      click: () => actionAPI("/api/v1/repos/action/allows-force-pushes")
+    }
+  ],
+  [
+    {
+      label: 'Allow Deletions: disabled',
+      click: () => actionAPI("/api/v1/repos/action/allows-deletions")
+    }
+  ],
 ]
 
 onMounted(() => {
