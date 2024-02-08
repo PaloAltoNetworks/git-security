@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   ElCheckbox,
+  ElInput,
   ElLink,
   ElNotification,
   TableV2FixedDir,
@@ -9,6 +10,7 @@ import {
 import type { CheckboxValueType, Column, RowClassNameGetter, SortBy } from 'element-plus'
 import { Loading as LoadingIcon } from '@element-plus/icons-vue'
 import Icon from '#ui/components/elements/Icon.vue'
+import UButton from '#ui/components/elements/Button.vue'
 
 type ColumnType = 'string' | 'number' | 'boolean'
 type ColumnConfig = {
@@ -59,6 +61,8 @@ const fetchRepos = () => {
         ["full_name"],
         [TableV2SortOrder.ASC],
       )
+      repos_table.originalData = repos_table.data
+      repos_table_search.text = ""
       repos_table.selected.clear()
     }
   })
@@ -145,6 +149,7 @@ const columns: Column<any>[] = [
     "dataKey": "full_name",
     "width": 400,
     "sortable": true,
+    "fixed": TableV2FixedDir.LEFT,
     cellRenderer: ({ cellData, rowData }) => h(
       ElLink,
       {
@@ -154,7 +159,49 @@ const columns: Column<any>[] = [
         onClick: (e) => e.stopPropagation(),
       },
       () => cellData
-    )
+    ),
+    headerCellRenderer: () => {
+      return h("div", {}, [
+        h("span", {}, "Repo Name"),
+        h("span",
+          {
+            style: { width: "250px", display: "inline-block", "margin-left": "10px", "margin-right": "10px" },
+          },
+          h(ElInput, {
+            onClick: (e: any) => {
+              e.stopPropagation()
+            },
+            onInput: (v) => {
+              repos_table_search.text = v
+              repos_table.data = useFilter(
+                repos_table.originalData,
+                (row: any) => {
+                  return row.full_name.toLowerCase().indexOf(repos_table_search.text.toLowerCase()) > -1
+                }
+              )
+            },
+            modelValue: repos_table_search.text
+          })
+        ),
+        h("span",
+          { style: { 'vertical-align': 'bottom', 'margin-left': '-40px', 'margin-right': '10px' } },
+          h(UButton,
+            {
+              onClick: (e: any) => {
+                e.stopPropagation()
+                repos_table_search.text = ""
+                repos_table.data = repos_table.originalData
+              },
+              color: "gray",
+              circle: true,
+              variant: "ghost",
+              size: "sm",
+              icon: "i-heroicons-x-mark-20-solid"
+            }
+          )
+        ),
+      ])
+    },
   }
 ]
 
@@ -210,11 +257,16 @@ const fetchColumns = () => {
   })
 }
 
+const repos_table_search = reactive({
+  text: ""
+})
+
 const repos_table = reactive({
   selectedDeviceID: null,
   rowKey: "repo",
   columns: columns,
-  data: [],
+  originalData: [],
+  data: <any>[],
   selected: new Map(),
   "sortState": ref<SortBy>({
     key: "full_name",
@@ -223,6 +275,11 @@ const repos_table = reactive({
   "onSort": (sortBy: SortBy) => {
     repos_table.data = useOrderBy(
       repos_table.data,
+      [sortBy.key],
+      [sortBy.order],
+    )
+    repos_table.originalData = useOrderBy(
+      repos_table.originalData,
       [sortBy.key],
       [sortBy.order],
     )
