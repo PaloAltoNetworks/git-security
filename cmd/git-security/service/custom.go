@@ -68,7 +68,7 @@ func (app *GitSecurityApp) runCustom() error {
 		for _, custom := range customs {
 			for _, p := range strings.Split(custom.Pattern, ",") {
 				// prereq check
-				if len(p) == 0 || len(custom.Image) == 0 || len(custom.Command) == 0 || len(custom.Field) == 0 {
+				if !custom.Enabled || len(p) == 0 || len(custom.Image) == 0 || len(custom.Command) == 0 || len(custom.Field) == 0 {
 					break
 				}
 				customRun := false

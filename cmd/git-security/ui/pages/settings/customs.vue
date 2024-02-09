@@ -14,6 +14,7 @@ type CustomConfig = {
   field: string
   default_value: any
   error_value: any
+  enabled: boolean
 }
 
 const customs = ref<CustomConfig[]>([])
@@ -172,6 +173,9 @@ onMounted(() => {
     <template #header>
       <div class="card-header">
         <span>#{{ index + 1 }} {{ element.field }}</span>
+        <el-switch v-model="element.enabled"
+                   class="enable-button"
+                   @change="customChanged(index)" />
       </div>
     </template>
     <div>
@@ -320,6 +324,10 @@ onMounted(() => {
 .delete-button {
   float: right;
   margin-top: 11px;
+}
+
+.enable-button {
+  float: right;
 }
 
 .env-add-button {

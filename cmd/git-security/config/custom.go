@@ -6,6 +6,7 @@ type EnvKeyValue struct {
 	Key   string `bson:"key" json:"key"`
 	Value string `bson:"value" json:"value"`
 }
+
 type Custom struct {
 	ID           primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
 	Pattern      string             `bson:"pattern" json:"pattern"`
@@ -16,4 +17,5 @@ type Custom struct {
 	Field        string             `bson:"field" json:"field"`
 	DefaultValue interface{}        `bson:"default_value" json:"default_value"`
 	ErrorValue   interface{}        `bson:"error_value" json:"error_value"`
+	Enabled      bool               `bson:"enabled" json:"enabled"`
 }
