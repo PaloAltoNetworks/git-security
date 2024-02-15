@@ -8,6 +8,7 @@ require (
 	github.com/docker/docker v25.0.1+incompatible
 	github.com/eekwong/go-common-flags v0.0.0-20240201001447-0d2efee4141c
 	github.com/eekwong/go-interruptible-service v0.1.0
+	github.com/gofiber/contrib/websocket v1.3.0
 	github.com/gofiber/fiber/v2 v2.52.0
 	github.com/gofri/go-github-ratelimit v1.1.0
 	github.com/google/go-github/v57 v57.0.0
@@ -20,6 +21,8 @@ require (
 	go.mongodb.org/mongo-driver v1.13.1
 	golang.org/x/oauth2 v0.16.0
 )
+
+require github.com/savsgio/gotils v0.0.0-20230208104028-c358bd845dee // indirect
 
 require (
 	github.com/AlekSi/pointer v1.2.0 // indirect
@@ -35,6 +38,7 @@ require (
 	github.com/docker/go-connections v0.5.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/fasthttp/websocket v1.5.7 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-logr/logr v1.4.1 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -50,7 +54,7 @@ require (
 	github.com/jackc/pgx-zap v0.0.0-20221202020421-94b1cb2f889f // indirect
 	github.com/jackc/pgx/v5 v5.5.1 // indirect
 	github.com/jackc/puddle/v2 v2.2.1 // indirect
-	github.com/klauspost/compress v1.17.0 // indirect
+	github.com/klauspost/compress v1.17.3 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.15 // indirect

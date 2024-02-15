@@ -1,4 +1,8 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+import { createProxyServer } from "httpxy"
+import { IncomingMessage } from "http"
+import internal from "stream"
+
 export default defineNuxtConfig({
   ssr: false,
   css: ['~/assets/scss/main.scss'],
@@ -39,6 +43,25 @@ export default defineNuxtConfig({
         target: 'http://localhost:8080/logout',
         changeOrigin: true
       }
+    }
+  },
+  hooks: {
+    listen(server) {
+      const proxy = createProxyServer({
+        ws: true,
+        secure: false,
+        changeOrigin: true,
+        target: { host: "localhost", port: 8080 }
+      })
+
+      const proxyFn = (req: IncomingMessage, socket: internal.Duplex, head: Buffer) => {
+        if (req.url && req.url.startsWith("/ws")) {
+          // @ts-ignore
+          proxy.ws(req, socket, head)
+        }
+      }
+      server.on("upgrade", proxyFn)
+      console.log("websocket dev proxy started")
     }
   },
   ui: {
