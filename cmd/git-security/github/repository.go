@@ -24,22 +24,28 @@ type GqlRepository struct {
 	DefaultBranchRef struct {
 		Name                 string               `bson:"name" json:"name"`
 		BranchProtectionRule BranchProtectionRule `bson:"branch_protection_rule" json:"branch_protection_rule"`
+		Target               Target               `bson:"target" json:"target"`
 	} `bson:"default_branch" json:"default_branch"`
 	PrimaryLanguage struct {
 		Name string `bson:"name" json:"name"`
 	} `bson:"primary_language" json:"primary_language"`
-	IsArchived          bool      `bson:"is_archived" json:"is_archived"`
-	IsDisabled          bool      `bson:"is_disabled" json:"is_disabled"`
-	IsEmpty             bool      `bson:"is_empty" json:"is_empty"`
-	IsLocked            bool      `bson:"is_locked" json:"is_locked"`
-	IsPrivate           bool      `bson:"is_private" json:"is_private"`
-	DeleteBranchOnMerge bool      `bson:"delete_branch_on_merge" json:"delete_branch_on_merge"`
-	MergeCommitAllowed  bool      `bson:"merge_commit_allowed" json:"merge_commit_allowed"`
-	RebaseMergeAllowed  bool      `bson:"rebase_merge_allowed" json:"rebase_merge_allowed"`
-	SquashMergeAllowed  bool      `bson:"squash_merge_allowed" json:"squash_merge_allowed"`
-	DiskUsage           int       `bson:"disk_usage" json:"disk_usage"`
-	CreatedAt           time.Time `bson:"created_at" json:"created_at"`
-	UpdatedAt           time.Time `bson:"updated_at" json:"updated_at"`
+	PullRequests        PullRequests `bson:"pull_requests" json:"pull_requests"`
+	IsArchived          bool         `bson:"is_archived" json:"is_archived"`
+	IsDisabled          bool         `bson:"is_disabled" json:"is_disabled"`
+	IsEmpty             bool         `bson:"is_empty" json:"is_empty"`
+	IsLocked            bool         `bson:"is_locked" json:"is_locked"`
+	IsPrivate           bool         `bson:"is_private" json:"is_private"`
+	DeleteBranchOnMerge bool         `bson:"delete_branch_on_merge" json:"delete_branch_on_merge"`
+	MergeCommitAllowed  bool         `bson:"merge_commit_allowed" json:"merge_commit_allowed"`
+	RebaseMergeAllowed  bool         `bson:"rebase_merge_allowed" json:"rebase_merge_allowed"`
+	SquashMergeAllowed  bool         `bson:"squash_merge_allowed" json:"squash_merge_allowed"`
+	DiskUsage           int          `bson:"disk_usage" json:"disk_usage"`
+	CreatedAt           time.Time    `bson:"created_at" json:"created_at"`
+	UpdatedAt           time.Time    `bson:"updated_at" json:"updated_at"`
+}
+
+type PullRequests struct {
+	TotalCount int `bson:"total_count" json:"total_count"`
 }
 
 type BranchProtectionRule struct {
@@ -63,6 +69,18 @@ type BranchProtectionRule struct {
 	RequiresStrictStatusChecks     bool `bson:"requires_strict_status_checks" json:"requires_strict_status_checks"`
 	RestrictsPushes                bool `bson:"retricts_pushes" json:"retricts_pushes"`
 	RestrictsReviewDismissals      bool `bson:"retricts_review_dismissals" json:"retricts_review_dismissals"`
+}
+
+type Target struct {
+	Commit CommitFragment `bson:"commit" json:"commit" graphql:"... on Commit"`
+}
+
+type CommitFragment struct {
+	History History `bson:"history" json:"history"`
+}
+
+type History struct {
+	TotalCount int `bson:"total_count" json:"total_count"`
 }
 
 func (ghi *GitHubImpl) GetRepos(orgName string) ([]*Repository, error) {

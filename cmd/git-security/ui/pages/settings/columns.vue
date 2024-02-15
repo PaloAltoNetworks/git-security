@@ -153,8 +153,10 @@ const allKnownDataKeys = ref<DataKeyItem[]>([
   { value: "name", link: "" },
   { value: "owner.login", link: "" },
   { value: "primary_language.name", link: "" },
+  { value: "pull_requests.total_count", link: "" },
   { value: "rebase_merge_allowed", link: "" },
-  { value: "squash_merge_allowed", link: "" }
+  { value: "squash_merge_allowed", link: "" },
+  { value: "default_branch.target.commit.history.total_count", link: "" },
 ])
 
 interface DataKeyItem {
