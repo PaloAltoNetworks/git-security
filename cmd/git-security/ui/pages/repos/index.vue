@@ -372,7 +372,7 @@ onMounted(() => {
 <template>
   <div class="common-layout">
     <el-container>
-      <el-aside width="300px">
+      <el-aside width="330px">
         <div class="filter-buttons">
           <el-button @click="exportToCSV"
                      circle

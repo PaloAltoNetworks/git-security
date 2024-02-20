@@ -29,6 +29,8 @@ var checked = 0
 const collapse = ref("")
 const items = ref<Item[]>([])
 const orderBy = ref(0) // 0: A-Z, 1: Z-A, 2, 9-1, 3: 1-9
+const totalCount = ref(0)
+const showPercentage = ref(false)
 const search = ref("")
 const searchedItems = ref<Item[]>([])
 const searchedItemsChecked = ref<Item[]>([])
@@ -80,6 +82,10 @@ const fetchFilters = async () => {
     },
     onResponse({ response }) {
       items.value = response._data
+      totalCount.value = 0
+      response._data.forEach((item: Item) => {
+        totalCount.value = totalCount.value + item.count
+      })
       sortFilters()
     }
   })
@@ -224,6 +230,11 @@ onMounted(async () => {
                 clearable
                 class="search"
                 :suffix-icon="Search" />
+      <UButton icon="i-fa6-solid-percent"
+               color="gray"
+               variant="ghost"
+               @click="showPercentage = !showPercentage"
+               :class="{ fade: !showPercentage }" />
       <UButton :icon="orderBy != 1 ? 'i-fa6-solid-arrow-down-a-z' : 'i-fa6-solid-arrow-down-z-a'"
                color="gray"
                variant="ghost"
@@ -268,7 +279,7 @@ onMounted(async () => {
                        style="color: green" />
               </span>
               <span v-else>{{ item.name }}</span>
-              ({{ item.count }})
+              ({{ showPercentage ? ((item.count * 100 / totalCount).toPrecision(3) + '%') : item.count }})
             </el-checkbox>
           </div>
         </template>
