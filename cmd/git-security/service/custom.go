@@ -325,6 +325,8 @@ func (app *GitSecurityApp) runSingleCustom(image, command string, envs []config.
 	buf.ReadFrom(out)
 
 	sc := bufio.NewScanner(buf)
+	b := make([]byte, 0, 1024*1024)
+	sc.Buffer(b, 102400*1024)
 	var line string
 	for sc.Scan() {
 		line = sc.Text()
