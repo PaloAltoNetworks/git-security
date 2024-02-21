@@ -3,6 +3,7 @@ import {
   ElCheckbox,
   ElInput,
   ElLink,
+  ElMessageBox,
   ElNotification,
   TableV2FixedDir,
   TableV2SortOrder
@@ -11,6 +12,7 @@ import type { CheckboxValueType, Column, RowClassNameGetter, SortBy } from 'elem
 import { Loading as LoadingIcon } from '@element-plus/icons-vue'
 import Icon from '#ui/components/elements/Icon.vue'
 import UButton from '#ui/components/elements/Button.vue'
+import { showConfirmationDialog } from '@/common-functions'
 
 type ColumnType = 'string' | 'number' | 'boolean'
 type ColumnConfig = {
@@ -293,80 +295,118 @@ const repos_table = reactive({
   },
 })
 
-const actionAPI = (api: string) => {
-  useFetch(api, {
-    method: "POST",
-    body: {
-      ids: Array.from(repos_table.selected.keys())
-    },
-    onResponse: ({ response }) => {
-      if (response.status == 200) {
-        ElNotification({
-          title: 'Success',
-          message: 'Operation success',
-          type: 'success',
-          position: 'bottom-right'
-        })
-      } else {
-        ElNotification({
-          title: 'Error',
-          message: 'Internal error occurred',
-          type: 'error',
-          position: 'bottom-right'
-        })
-      }
+const actionAPI = async (api: string, actionLabel: string) => {
+  try {
+    const confirmed = await showConfirmationDialog(`Are you sure you want to perform the action:\n ${actionLabel} ?`)
+    if (confirmed) {
+      useFetch(api, {
+        method: 'POST',
+        body: {
+          ids: Array.from(repos_table.selected.keys()),
+        },
+        onResponse: ({ response }) => {
+          if (response.status == 200) {
+            ElNotification({
+              title: 'Success',
+              message: 'Operation success',
+              type: 'success',
+              position: 'bottom-right',
+            });
+          } else {
+            ElNotification({
+              title: 'Error',
+              message: 'Internal error occurred',
+              type: 'error',
+              position: 'bottom-right',
+            });
+          }
+        },
+      });
     }
-  })
-}
+  } catch (error) {
+    console.error('Error in confirmation dialog:', error)
+  }
+};
+
 
 const actions = [
   [
     {
       label: 'Add Default Branch Protection Rule',
-      click: () => actionAPI("/api/v1/repos/action/add-branch-protection-rule")
+      click: () => actionAPI("/api/v1/repos/action/add-branch-protection-rule", "Add Default Branch Protection Rule")
     }
   ],
   [
     {
       label: 'Requires PR: enabled',
-      click: () => actionAPI("/api/v1/repos/action/requires-pr")
+      click: () => actionAPI("/api/v1/repos/action/requires-pr", "Requires PR")
     }
   ],
   [
     {
       label: 'Requires Approving Review Count: 2',
-      click: () => actionAPI("/api/v1/repos/action/required-approving-review-count")
+      click: () => actionAPI("/api/v1/repos/action/required-approving-review-count", "Requires Approving Review Count")
     }
   ],
   [
     {
       label: 'Dismiss Stale Review: enabled',
-      click: () => actionAPI("/api/v1/repos/action/dismisses-stale-reviews")
+      click: () => actionAPI("/api/v1/repos/action/dismisses-stale-reviews", "Dismiss Stale Review")
     }
   ],
   [
     {
       label: 'Requires Conversation Resolution: enabled',
-      click: () => actionAPI("/api/v1/repos/action/requires-conversation-resolution")
+      click: () => actionAPI("/api/v1/repos/action/requires-conversation-resolution", "Requires Conversation Resolution")
     }
   ],
   [
     {
       label: 'Allow Force Pushes: disabled',
-      click: () => actionAPI("/api/v1/repos/action/allows-force-pushes")
+      click: () => actionAPI("/api/v1/repos/action/allows-force-pushes", "Allow Force Pushes")
     }
   ],
   [
     {
       label: 'Allow Deletions: disabled',
-      click: () => actionAPI("/api/v1/repos/action/allows-deletions")
+      click: () => actionAPI("/api/v1/repos/action/allows-deletions", "Allow Deletions")
     }
   ],
 ]
 
+const handleWebSocketMessage = (event: MessageEvent) => {
+  const data = JSON.parse(event.data)
+  if (data) {
+    fetchRepos()
+  }
+}
+
+const setupWebSocket = () => {
+
+  const ws = new WebSocket(location.origin.replace(/^http/, 'ws') + "/ws")
+
+  ws.onopen = () => {
+    console.log("WebSocket connection opened")
+  }
+
+  ws.onmessage = (event) => handleWebSocketMessage(event)
+
+  ws.onclose = (event) => {
+    console.error("WebSocket connection closed:", event.code, event.reason)
+  }
+
+  ws.onerror = (error) => {
+    console.error("WebSocket error:", error)
+  }
+
+}
+
+
 onMounted(() => {
+  setupWebSocket()
   fetchColumns()
 })
+
 </script>
 
 <template>

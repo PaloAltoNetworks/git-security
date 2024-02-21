@@ -124,6 +124,28 @@ func (ghi *GitHubImpl) GetRepos(orgName string) ([]*Repository, error) {
 	return repos, nil
 }
 
+func (ghi *GitHubImpl) GetRepo(orgName, repoName string) (*Repository, error) {
+	var q struct {
+		Repository GqlRepository `graphql:"repository(owner: $org, name: $repo)"`
+	}
+
+	variables := map[string]interface{}{
+		"org":  githubv4.String(orgName),
+		"repo": githubv4.String(repoName),
+	}
+
+	if err := ghi.gqlClient.Query(ghi.ctx, &q, variables); err != nil {
+		return nil, err
+	}
+
+	repo := &Repository{
+		GqlRepository: &q.Repository,
+		GitHubHost:    ghi.githubHost,
+	}
+
+	return repo, nil
+}
+
 func (ghi *GitHubImpl) CreateBranchProtectionRule(repoID, pattern string) error {
 	var m struct {
 		CreateBranchProtectionRule struct {

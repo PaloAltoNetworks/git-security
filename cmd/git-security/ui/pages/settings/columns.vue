@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { showConfirmationDialog } from '@/common-functions'
+
 type ColumnType = 'string' | 'number' | 'boolean'
 type ColumnConfig = {
   id: string
@@ -98,28 +100,36 @@ const columnChanged = (index: number) => {
   }, 500)
 }
 
-const deleteColumn = (id: string) => {
-  useFetch(`/api/v1/column/${id}`, {
-    method: "DELETE",
-    onResponse({ response }) {
-      if (response.status == 200) {
-        ElNotification({
-          title: 'Success',
-          message: 'Column config was deleted successfully',
-          type: 'success',
-          position: 'bottom-right'
-        })
-      } else {
-        ElNotification({
-          title: 'Error',
-          message: 'Internal error occurred',
-          type: 'error',
-          position: 'bottom-right'
-        })
-      }
-      fetchColumns()
+const deleteColumn = async (id: string, column: string) => {
+  try {
+    const confirmed = await showConfirmationDialog(`Are you sure you want to delete the column: \n${column} ?`)
+    if (confirmed) {
+      useFetch(`/api/v1/column/${id}`, {
+        method: "DELETE",
+        onResponse({ response }) {
+          if (response.status == 200) {
+            ElNotification({
+              title: 'Success',
+              message: 'Column config was deleted successfully',
+              type: 'success',
+              position: 'bottom-right'
+            })
+          } else {
+            ElNotification({
+              title: 'Error',
+              message: 'Internal error occurred',
+              type: 'error',
+              position: 'bottom-right'
+            })
+          }
+          fetchColumns()
+        }
+      })
+
     }
-  })
+  } catch (error) {
+    console.error(error)
+  }
 }
 
 const allKnownDataKeys = ref<DataKeyItem[]>([
@@ -311,7 +321,7 @@ onMounted(() => {
                      class="delete-button"
                      circle
                      plain
-                     @click="deleteColumn(element.id)">
+                     @click="deleteColumn(element.id, element.title)">
             <UIcon name="i-fa6-solid-trash-can" />
           </el-button>
         </div>

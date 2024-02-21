@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/tidwall/gjson"
@@ -190,6 +191,11 @@ func (a *api) AddBranchProtectionRule(c *fiber.Ctx) error {
 					slog.String("repo", repo.Name),
 				)
 				hasError = true
+				continue
+			}
+			if err := a.updateRepository(&repo); err != nil {
+				hasError = true
+				continue
 			}
 		} else {
 			slog.Info("ignoring CreateBranchProtectionRule due to an existing one", slog.String("repo", repo.Name))
@@ -242,6 +248,11 @@ func (a *api) updateBranchProtectionRule(c *fiber.Ctx, updateField string, updat
 					slog.String("repo", repo.Name),
 				)
 				hasError = true
+				continue
+			}
+			if err := a.updateRepository(&repo); err != nil {
+				hasError = true
+				continue
 			}
 		} else {
 			slog.Info("ignoring UpdateBranchProtectionRule: not existed", slog.String("repo", repo.Name))
@@ -280,4 +291,32 @@ func (a *api) AllowsForcePushes(c *fiber.Ctx) error {
 
 func (a *api) AllowsDeletions(c *fiber.Ctx) error {
 	return a.updateBranchProtectionRule(c, "AllowsDeletions", false)
+}
+
+func (a *api) updateRepository(repo *gh.Repository) error {
+
+	updatedRepo, err := a.g.GetRepo(repo.Owner.Login, repo.Name)
+	if err != nil {
+		slog.Error(
+			"error in GetRepo",
+			slog.String("error", err.Error()),
+			slog.String("repo", repo.Name),
+		)
+		return err
+	}
+
+	updatedRepo.FetchedAt = time.Now()
+	filter := bson.D{{Key: "id", Value: repo.ID}}
+	update := bson.D{{Key: "$set", Value: updatedRepo}}
+	if _, err := a.db.Collection("repositories").
+		UpdateOne(a.ctx, filter, update); err != nil {
+		slog.Error(
+			"error in updating the database",
+			slog.String("error", err.Error()),
+			slog.String("repo", repo.Name),
+		)
+		return err
+	}
+	a.broadcastMessage(*updatedRepo)
+	return nil
 }

@@ -2,9 +2,12 @@ package api
 
 import (
 	"context"
+	"encoding/json"
+	"log/slog"
 	"os"
 	"path/filepath"
 
+	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/basicauth"
 	"github.com/gofiber/fiber/v2/middleware/compress"
@@ -14,10 +17,11 @@ import (
 )
 
 type api struct {
-	ctx context.Context
-	db  *mongo.Database
-	g   gh.GitHub
-	key []byte
+	ctx     context.Context
+	db      *mongo.Database
+	g       gh.GitHub
+	key     []byte
+	clients map[*websocket.Conn]bool
 }
 
 func NewFiberApp(
@@ -32,10 +36,11 @@ func NewFiberApp(
 	app.Use(compress.New())
 
 	a := api{
-		ctx: ctx,
-		db:  db,
-		g:   g,
-		key: key,
+		ctx:     ctx,
+		db:      db,
+		g:       g,
+		key:     key,
+		clients: make(map[*websocket.Conn]bool),
 	}
 
 	app.Get("/ping", func(c *fiber.Ctx) error {
@@ -49,6 +54,24 @@ func NewFiberApp(
 		Users: map[string]string{
 			adminUsername: adminPassword,
 		},
+	}))
+
+	app.Get("/ws", websocket.New(func(c *websocket.Conn) {
+		slog.Info("WebSocket connection established")
+		a.clients[c] = true
+		defer func() {
+			delete(a.clients, c)
+			c.Close()
+		}()
+		for {
+			_, _, err := c.ReadMessage()
+			if err != nil {
+				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+					slog.Error("error in socket ReadMessage", slog.String("error", err.Error()))
+				}
+				break
+			}
+		}
 	}))
 
 	apiRoute := app.Group("/api")
@@ -77,4 +100,30 @@ func NewFiberApp(
 	app.Static("/", filesDir)
 
 	return app
+}
+
+func (a *api) broadcastMessage(repo gh.Repository) {
+	// Convert the repo object to a JSON string
+	repoJson, err := json.Marshal(repo)
+	if err != nil {
+		slog.Error(
+			"error in broadcastMessage",
+			slog.String("error", err.Error()),
+			slog.String("repo", repo.Name),
+		)
+		return
+	}
+
+	// Broadcast the JSON string to all connected WebSocket clients
+	for client := range a.clients {
+		if err := client.WriteMessage(websocket.TextMessage, repoJson); err != nil {
+			slog.Error(
+				"error in socket WriteMessage",
+				slog.String("error", err.Error()),
+				slog.String("repo", repo.Name),
+			)
+			client.Close()
+			delete(a.clients, client)
+		}
+	}
 }
