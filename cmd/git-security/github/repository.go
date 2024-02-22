@@ -30,6 +30,7 @@ type GqlRepository struct {
 		Name string `bson:"name" json:"name"`
 	} `bson:"primary_language" json:"primary_language"`
 	PullRequests        PullRequests `bson:"pull_requests" json:"pull_requests"`
+	Refs                Refs         `bson:"refs" json:"refs" graphql:"refs(first: 0, refPrefix: \"refs/heads/\")"`
 	IsArchived          bool         `bson:"is_archived" json:"is_archived"`
 	IsDisabled          bool         `bson:"is_disabled" json:"is_disabled"`
 	IsEmpty             bool         `bson:"is_empty" json:"is_empty"`
@@ -42,6 +43,10 @@ type GqlRepository struct {
 	DiskUsage           int          `bson:"disk_usage" json:"disk_usage"`
 	CreatedAt           time.Time    `bson:"created_at" json:"created_at"`
 	UpdatedAt           time.Time    `bson:"updated_at" json:"updated_at"`
+}
+
+type Refs struct {
+	TotalCount int `bson:"total_count" json:"total_count"`
 }
 
 type PullRequests struct {
