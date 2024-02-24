@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { showConfirmationDialog } from '@/common-functions'
 
-type ColumnType = 'string' | 'number' | 'boolean'
+type ColumnType = 'string' | 'number' | 'boolean' | 'array'
 type ColumnConfig = {
   id: string
   type: ColumnType
@@ -284,6 +284,9 @@ onMounted(() => {
             <el-option key="boolean"
                        label="Boolean"
                        value="boolean" />
+            <el-option key="array"
+                       label="Array"
+                       value="array" />
           </el-select>
           <el-input v-model="element.description"
                     class="w-60 m-2"

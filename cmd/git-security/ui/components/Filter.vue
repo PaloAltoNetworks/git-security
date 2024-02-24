@@ -287,6 +287,7 @@ onMounted(async () => {
     </el-collapse-item>
     <el-checkbox-group v-if="props.filters![field!]"
                        v-model="props.filters![field!]"
+                       class="scrollable"
                        @change="checkboxChanged()"
                        :disabled="disabled">
       <template v-for="item in items">
@@ -339,7 +340,7 @@ onMounted(async () => {
 }
 
 .el-input {
-  width: 50%;
+  width: 45%;
 }
 
 .el-button {

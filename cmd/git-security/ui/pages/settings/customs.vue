@@ -3,7 +3,7 @@ type KeyValue = {
   key: string
   value: string
 }
-type CustomType = 'string' | 'number' | 'boolean'
+type CustomType = 'string' | 'number' | 'boolean' | 'array'
 type CustomConfig = {
   id: string
   pattern: string
@@ -37,24 +37,40 @@ const cast = (value: any, toType: string) => {
       return value
     } else if (toType == "string") {
       return String(value)
-    } else {
+    } else if (toType == "boolean") {
       return value > 0 ? true : false
+    } else {
+      return ""
     }
   } else if (typeof value === 'boolean') {
     if (toType == "boolean") {
       return value
     } else if (toType == "string") {
       return String(value)
-    } else {
+    } else if (toType == "number") {
       return value ? 1 : 0
+    } else {
+      return ""
+    }
+  } else if (typeof value === 'object') {
+    if (toType == "boolean") {
+      return value.length > 0
+    } else if (toType == "string") {
+      return ""
+    } else if (toType == "number") {
+      return value.length ? 1 : 0
+    } else {
+      return ""
     }
   } else {
     if (toType == "string") {
       return value
     } else if (toType == "number") {
       return isNaN(parseFloat(value)) ? 0 : parseFloat(value)
-    } else {
+    } else if (toType == "string") {
       return value.length >= 0 && value.toLowerCase() != 'false' && value.toLowerCase() != '0'
+    } else {
+      return ""
     }
   }
 }
@@ -281,6 +297,9 @@ onMounted(() => {
         <el-option key="boolean"
                    label="Boolean"
                    value="boolean" />
+        <el-option key="array"
+                   label="Array"
+                   value="array" />
       </el-select>
       <template v-if="element.value_type != 'boolean'">
         <el-input v-model="element.default_value"

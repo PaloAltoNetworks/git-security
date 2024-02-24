@@ -8,6 +8,6 @@ curl -skL \
     jq '.[] | select(.enforcement=="enabled") | .name' | \
     sort | \
     tr -d '"' | \
-    paste -sd "|" -
+    jq -cRnM '[inputs]'
 
 sleep ${DELAY:-1}

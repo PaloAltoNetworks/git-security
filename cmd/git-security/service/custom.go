@@ -180,24 +180,21 @@ func (app *GitSecurityApp) runCustom() error {
 						repo.Customs[custom.Field] = r
 					}
 				case "number":
-
-					if repo.NameWithOwner == "BAD-GCP/AppNotificationListener" {
-						fmt.Printf("%+v\n", repo.Customs[custom.Field])
-					}
 					r := cast.ToFloat64(result)
 					if v, ok := repo.Customs[custom.Field]; !ok || v != r {
 						hasUpdate = true
 						repo.Customs[custom.Field] = r
-						if repo.NameWithOwner == "BAD-GCP/AppNotificationListener" {
-							fmt.Printf("%+v\n", r)
-						}
-					}
-
-					if repo.NameWithOwner == "BAD-GCP/AppNotificationListener" {
-						fmt.Printf("%+v\n", r)
 					}
 				case "boolean":
 					r := cast.ToBool(result)
+					if v, ok := repo.Customs[custom.Field]; !ok || v != r {
+						hasUpdate = true
+						repo.Customs[custom.Field] = r
+					}
+				case "array":
+					var arr []string
+					json.Unmarshal([]byte(cast.ToString(result)), &arr)
+					r := strings.Join(arr, "|")
 					if v, ok := repo.Customs[custom.Field]; !ok || v != r {
 						hasUpdate = true
 						repo.Customs[custom.Field] = r

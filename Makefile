@@ -3,8 +3,8 @@ ifeq ($(UNAME_S),Linux)
 	LDFLAGS = -extldflags "-static"
 endif
 
-GO_BUILDER_VERSION = 1.21.6
-NODE_BUILDER_VERSION = 18.19.0-alpine3.18
+GO_BUILDER_VERSION = 1.22.0
+NODE_BUILDER_VERSION = 18.19.1-alpine3.19
 ALPINE_VERSION = 3.19.1
 
 help: ## Display this help.

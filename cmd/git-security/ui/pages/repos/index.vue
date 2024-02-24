@@ -14,7 +14,7 @@ import Icon from '#ui/components/elements/Icon.vue'
 import UButton from '#ui/components/elements/Button.vue'
 import { showConfirmationDialog } from '@/common-functions'
 
-type ColumnType = 'string' | 'number' | 'boolean'
+type ColumnType = 'string' | 'number' | 'boolean' | 'array'
 type ColumnConfig = {
   type: ColumnType
   title: string
@@ -105,11 +105,17 @@ const columns: Column<any>[] = [
         }
       }
       return h(
-        ElCheckbox,
+        "div",
         {
-          onChange: onChange,
-          modelValue: repos_table.selected.has(rowData['id'])
-        }
+          style: { padding: "5px 0" }
+        },
+        h(
+          ElCheckbox,
+          {
+            onChange: onChange,
+            modelValue: repos_table.selected.has(rowData['id'])
+          }
+        )
       )
     },
     headerCellRenderer: () => {
@@ -153,14 +159,20 @@ const columns: Column<any>[] = [
     "sortable": true,
     "fixed": TableV2FixedDir.LEFT,
     cellRenderer: ({ cellData, rowData }) => h(
-      ElLink,
+      "div",
       {
-        href: `https://${rowData['github_host']}/${cellData}`,
-        target: "_blank",
-        underline: false,
-        onClick: (e) => e.stopPropagation(),
+        style: { padding: "5px 0" }
       },
-      () => cellData
+      h(
+        ElLink,
+        {
+          href: `https://${rowData['github_host']}/${cellData}`,
+          target: "_blank",
+          underline: false,
+          onClick: (e) => e.stopPropagation(),
+        },
+        () => cellData
+      )
     ),
     headerCellRenderer: () => {
       return h("div", {}, [
@@ -229,11 +241,39 @@ const fetchColumns = () => {
           }
           if (cc.type == "boolean") {
             c["cellRenderer"] = ({ cellData }) => h(
-              Icon,
+              "div",
               {
-                name: cellData ? "i-fa6-solid-check" : "i-fa6-solid-xmark",
-                style: cellData ? "color: green" : "color: red"
-              }
+                style: { padding: "5px 0" }
+              },
+              h(
+                Icon,
+                {
+                  name: cellData ? "i-fa6-solid-check" : "i-fa6-solid-xmark",
+                  style: cellData ? "color: green" : "color: red"
+                }
+              )
+            )
+          } else if (cc.type == "array") {
+            c["cellRenderer"] = ({ cellData }) => {
+              return h(
+                "div",
+                {
+                  style: { padding: "5px 0" }
+                },
+                cellData ? cellData.split("|").map((cd: string) => {
+                  return h("div", {}, cd)
+                }) : "")
+            }
+          } else {
+            c["cellRenderer"] = ({ cellData }) => h(
+              "div",
+              {
+                style: { padding: "5px 0" }
+              },
+              h(
+                "span",
+                cellData
+              )!
             )
           }
           if (cc.description) {
@@ -254,6 +294,33 @@ const fetchColumns = () => {
         }
       })
 
+      // workaround: https://github.com/element-plus/element-plus/issues/13968
+      const tableLeft = document.querySelector(
+        'div.el-table-v2__table.el-table-v2__left > div.el-vl__wrapper.el-table-v2__body > div:nth-child(1)'
+      )! as HTMLElement
+
+      const tableMain = document.querySelector(
+        'div.el-table-v2__table.el-table-v2__main > div.el-vl__wrapper.el-table-v2__body > div:nth-child(1)'
+      )! as HTMLElement
+
+      const observer = new MutationObserver(async () => {
+        observer.disconnect()
+
+        const tableMainHeight = Number.parseInt(tableMain.style.height)
+        if (Number.parseInt(tableLeft.style.height) != tableMainHeight) {
+          tableLeft?.style!.setProperty('height', 'auto')
+        }
+
+        observer.observe(tableLeft, {
+          attributes: true,
+          attributeFilter: ['style'],
+        })
+      })
+      observer.observe(tableLeft, {
+        attributes: true,
+        attributeFilter: ['style'],
+      })
+
       fetchRepos()
     }
   })
@@ -265,7 +332,7 @@ const repos_table_search = reactive({
 
 const repos_table = reactive({
   selectedDeviceID: null,
-  rowKey: "repo",
+  rowKey: "id",
   columns: columns,
   originalData: [],
   data: <any>[],
@@ -328,7 +395,6 @@ const actionAPI = async (api: string, actionLabel: string) => {
   }
 };
 
-
 const actions = [
   [
     {
@@ -382,7 +448,6 @@ const handleWebSocketMessage = (event: MessageEvent) => {
 }
 
 const setupWebSocket = () => {
-
   const ws = new WebSocket(location.origin.replace(/^http/, 'ws') + "/ws")
 
   ws.onopen = () => {
@@ -398,9 +463,7 @@ const setupWebSocket = () => {
   ws.onerror = (error) => {
     console.error("WebSocket error:", error)
   }
-
 }
-
 
 onMounted(() => {
   setupWebSocket()
@@ -464,6 +527,7 @@ onMounted(() => {
                            :width="width"
                            :height="height"
                            fixed
+                           :estimated-row-height="43"
                            :sort-by="repos_table.sortState"
                            @column-sort="repos_table.onSort"
                            :row-class="repos_table.rowClass">
