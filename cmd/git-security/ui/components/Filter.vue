@@ -3,7 +3,7 @@ import { Search } from '@element-plus/icons-vue'
 
 type Filter = {
   field: string
-  values: string[]
+  values: any[]
 }
 
 type Item = {
@@ -75,7 +75,7 @@ const fetchFilters = async () => {
       filters.push(elem)
     }
   }
-  const { data } = useFetch(`/api/v1/repos/${props.field}`, {
+  await $fetch(`/api/v1/repos/${props.field}`, {
     method: "POST",
     body: {
       filters: filters

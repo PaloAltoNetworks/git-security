@@ -3,7 +3,6 @@ import {
   ElCheckbox,
   ElInput,
   ElLink,
-  ElMessageBox,
   ElNotification,
   TableV2FixedDir,
   TableV2SortOrder
@@ -14,7 +13,7 @@ import Icon from '#ui/components/elements/Icon.vue'
 import UButton from '#ui/components/elements/Button.vue'
 import { showConfirmationDialog } from '@/common-functions'
 
-type ColumnType = 'string' | 'number' | 'boolean' | 'array'
+type ColumnType = 'string' | 'number' | 'boolean' | 'array' | 'date'
 type ColumnConfig = {
   type: ColumnType
   title: string
@@ -50,7 +49,7 @@ const transform = (f: Record<string, string[]>) => {
 
 const fetchRepos = () => {
   loading.value = true
-  useFetch("/api/v1/repos", {
+  $fetch("/api/v1/repos", {
     method: "POST",
     body: {
       filters: transform(filters.value)
@@ -77,7 +76,7 @@ const refreshFilter = async () => {
 }
 
 const exportToCSV = async () => {
-  useFetch('/api/v1/repos?csv=true', {
+  $fetch('/api/v1/repos?csv=true', {
     method: "POST",
     body: {
       filters: transform(filters.value)
@@ -221,7 +220,7 @@ const columns: Column<any>[] = [
 
 const filterCCs: ColumnConfig[] = []
 const fetchColumns = () => {
-  useFetch("/api/v1/columns", {
+  $fetch("/api/v1/columns", {
     method: "GET",
     onResponse({ response }) {
       response._data.forEach((cc: ColumnConfig) => {
@@ -239,43 +238,43 @@ const fetchColumns = () => {
           if (cc.type != "string") {
             c["align"] = "center"
           }
-          if (cc.type == "boolean") {
-            c["cellRenderer"] = ({ cellData }) => h(
-              "div",
-              {
-                style: { padding: "5px 0" }
-              },
-              h(
+
+          const getContent = (cellData: any) => {
+            if (cc.type == "boolean") {
+              return h(
                 Icon,
                 {
                   name: cellData ? "i-fa6-solid-check" : "i-fa6-solid-xmark",
                   style: cellData ? "color: green" : "color: red"
                 }
               )
-            )
-          } else if (cc.type == "array") {
-            c["cellRenderer"] = ({ cellData }) => {
-              return h(
-                "div",
+            } else if (cc.type == "array") {
+              return cellData ? cellData.split("|").map((cd: string) => {
+                return h("div", {}, cd)
+              }) : ""
+            } else if (cc.type == "date") {
+              return cellData != "0001-01-01T00:00:00Z" ? h(
+                "span",
                 {
-                  style: { padding: "5px 0" }
+                  title: useDayjs()(cellData).local().format()
                 },
-                cellData ? cellData.split("|").map((cd: string) => {
-                  return h("div", {}, cd)
-                }) : "")
-            }
-          } else {
-            c["cellRenderer"] = ({ cellData }) => h(
-              "div",
-              {
-                style: { padding: "5px 0" }
-              },
-              h(
+                useDayjs()(cellData).fromNow()
+              ) : h("span", "")
+            } else {
+              return h(
                 "span",
                 cellData
-              )!
-            )
+              )
+            }
           }
+          c["cellRenderer"] = ({ cellData }) => h(
+            "div",
+            {
+              style: { padding: "5px 0" }
+            },
+            getContent(cellData)
+          )
+
           if (cc.description) {
             const d = cc.description
             const t = cc.title
@@ -366,7 +365,7 @@ const actionAPI = async (api: string, actionLabel: string) => {
   try {
     const confirmed = await showConfirmationDialog(`Are you sure you want to perform the action:\n ${actionLabel} ?`)
     if (confirmed) {
-      useFetch(api, {
+      $fetch(api, {
         method: 'POST',
         body: {
           ids: Array.from(repos_table.selected.keys()),
@@ -506,16 +505,18 @@ onMounted(() => {
             </template>
           </UDropdown>
         </div>
-        <Filter v-if="filterCCs.length > 0"
-                v-for="c in filterCCs"
-                :type="c.type"
-                :title="c.title"
-                :field="c.key"
-                :expand="c.filter_expanded"
-                :filters="filters"
-                :filtersOrder="filtersOrder"
-                @updateFilters="updateFilters"
-                :disabled="loading" />
+        <template v-if="filterCCs.length > 0"
+                  v-for="c in filterCCs">
+          <Filter v-if="c.type != 'date'"
+                  :type="c.type"
+                  :title="c.title"
+                  :field="c.key"
+                  :expand="c.filter_expanded"
+                  :filters="filters"
+                  :filtersOrder="filtersOrder"
+                  @updateFilters="updateFilters"
+                  :disabled="loading" />
+        </template>
       </el-aside>
       <el-main>
         <div :style="{ height: 'calc(100vh - 150px)' }">

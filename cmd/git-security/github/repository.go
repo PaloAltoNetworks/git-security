@@ -7,11 +7,12 @@ import (
 )
 
 type Repository struct {
-	*GqlRepository `bson:"inline"`
-	Customs        map[string]interface{} `bson:"customs,omitempty" json:"customs,omitempty"`
-	GitHubHost     string                 `bson:"github_host,omitempty" json:"github_host,omitempty"`
-	FetchedAt      time.Time              `bson:"fetched_at,omitempty" json:"fetched_at,omitempty"`
-	CustomRunAt    time.Time              `bson:"custom_run_at,omitempty" json:"custom_run_at,omitempty"`
+	*GqlRepository  `bson:"inline"`
+	Customs         map[string]interface{} `bson:"customs,omitempty" json:"customs,omitempty"`
+	GitHubHost      string                 `bson:"github_host,omitempty" json:"github_host,omitempty"`
+	FetchedAt       time.Time              `bson:"fetched_at,omitempty" json:"fetched_at,omitempty"`
+	CustomRunAt     time.Time              `bson:"custom_run_at,omitempty" json:"custom_run_at,omitempty"`
+	LastCommittedAt time.Time              `bson:"last_committed_at" json:"last_committed_at"`
 }
 
 type GqlRepository struct {
@@ -81,11 +82,28 @@ type Target struct {
 }
 
 type CommitFragment struct {
-	History History `bson:"history" json:"history"`
+	History History `bson:"history" json:"history" graphql:"history(first: 1)"`
 }
 
 type History struct {
-	TotalCount int `bson:"total_count" json:"total_count"`
+	Nodes      []Commit `bson:"-" json:"-"`
+	TotalCount int      `bson:"total_count" json:"total_count"`
+}
+
+type Commit struct {
+	CommittedDate time.Time `bson:"-" json:"-"`
+}
+
+func (ghi *GitHubImpl) NewRepository(node GqlRepository) *Repository {
+	r := &Repository{
+		GqlRepository: &node,
+		GitHubHost:    ghi.githubHost,
+	}
+	commits := r.DefaultBranchRef.Target.Commit.History.Nodes
+	if len(commits) > 0 {
+		r.LastCommittedAt = r.DefaultBranchRef.Target.Commit.History.Nodes[0].CommittedDate
+	}
+	return r
 }
 
 func (ghi *GitHubImpl) GetRepos(orgName string) ([]*Repository, error) {
@@ -113,12 +131,9 @@ func (ghi *GitHubImpl) GetRepos(orgName string) ([]*Repository, error) {
 			return nil, err
 		}
 		for _, node := range q.Organization.Repositories.Nodes {
-			node := node
-			repos = append(repos, &Repository{
-				GqlRepository: &node,
-				GitHubHost:    ghi.githubHost,
-				FetchedAt:     time.Now(),
-			})
+			r := ghi.NewRepository(node)
+			r.FetchedAt = time.Now()
+			repos = append(repos, r)
 		}
 		if !q.Organization.Repositories.PageInfo.HasNextPage {
 			break
@@ -143,12 +158,7 @@ func (ghi *GitHubImpl) GetRepo(orgName, repoName string) (*Repository, error) {
 		return nil, err
 	}
 
-	repo := &Repository{
-		GqlRepository: &q.Repository,
-		GitHubHost:    ghi.githubHost,
-	}
-
-	return repo, nil
+	return ghi.NewRepository(q.Repository), nil
 }
 
 func (ghi *GitHubImpl) CreateBranchProtectionRule(repoID, pattern string) error {

@@ -112,7 +112,7 @@ func (app *GitSecurityApp) Run() (interruptible.Stop, error) {
 	}
 
 	// create default columns
-	app.createDefaultColumns(ctx)
+	app.createDefaultColumns()
 
 	// setup github clients
 	app.g, err = gh.New(ctx, app.opts.GitHub.Host, app.opts.GitHub.PAT, app.opts.CACert)
@@ -248,7 +248,7 @@ func (app *GitSecurityApp) createIndices(ctx context.Context) error {
 	return nil
 }
 
-func (app *GitSecurityApp) createDefaultColumns(ctx context.Context) error {
+func (app *GitSecurityApp) createDefaultColumns() error {
 	defaultColumns := []config.Column{
 		{
 			Type:           "string",

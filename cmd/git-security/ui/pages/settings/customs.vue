@@ -20,7 +20,7 @@ type CustomConfig = {
 
 const customs = ref<CustomConfig[]>([])
 const fetchCustoms = () => {
-  useFetch("/api/v1/customs", {
+  $fetch("/api/v1/customs", {
     method: "GET",
     onResponse({ response }) {
       customs.value.splice(0)
@@ -80,7 +80,7 @@ const customChanged = (index: number) => {
   c.default_value = cast(c.default_value, c.value_type)
   c.error_value = cast(c.error_value, c.value_type)
   setTimeout(() => {
-    useFetch(`/api/v1/custom/${c.id}`, {
+    $fetch(`/api/v1/custom/${c.id}`, {
       method: "PUT",
       body: c,
       onResponse({ response }) {
@@ -106,7 +106,7 @@ const customChanged = (index: number) => {
 }
 
 const deleteCustom = (id: string) => {
-  useFetch(`/api/v1/custom/${id}`, {
+  $fetch(`/api/v1/custom/${id}`, {
     method: "DELETE",
     onResponse({ response }) {
       if (response.status == 200) {
@@ -130,7 +130,7 @@ const deleteCustom = (id: string) => {
 }
 
 const addCustom = () => {
-  useFetch("/api/v1/customs", {
+  $fetch("/api/v1/customs", {
     method: "POST",
     onResponse({ response }) {
       if (response.status == 200) {

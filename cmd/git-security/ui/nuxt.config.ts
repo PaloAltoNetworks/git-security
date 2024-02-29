@@ -21,6 +21,7 @@ export default defineNuxtConfig({
     '@nuxtjs/color-mode',
     '@nuxtjs/google-fonts',
     '@vueuse/nuxt',
+    'dayjs-nuxt',
     'nuxt-icon',
     'nuxt-lodash'
   ],

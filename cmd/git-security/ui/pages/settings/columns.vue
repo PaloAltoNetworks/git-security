@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { showConfirmationDialog } from '@/common-functions'
 
-type ColumnType = 'string' | 'number' | 'boolean' | 'array'
+type ColumnType = 'string' | 'number' | 'boolean' | 'array' | 'date'
 type ColumnConfig = {
   id: string
   type: ColumnType
@@ -18,7 +18,7 @@ type ColumnConfig = {
 
 const columns = ref<ColumnConfig[]>([])
 const fetchColumns = () => {
-  useFetch("/api/v1/columns", {
+  $fetch("/api/v1/columns", {
     method: "GET",
     onResponse({ response }) {
       columns.value.splice(0)
@@ -43,7 +43,7 @@ const moved = (e: any) => {
       prev = columns.value[currentIndex - 1].order
       next = columns.value[currentIndex + 1].order
     }
-    useFetch("/api/v1/columns/order", {
+    $fetch("/api/v1/columns/order", {
       method: "POST",
       body: {
         id: movedColumn.id,
@@ -75,7 +75,7 @@ const moved = (e: any) => {
 const columnChanged = (index: number) => {
   setTimeout(() => {
     const c = columns.value[index]
-    useFetch(`/api/v1/column/${c.id}`, {
+    $fetch(`/api/v1/column/${c.id}`, {
       method: "PUT",
       body: c,
       onResponse({ response }) {
@@ -104,7 +104,7 @@ const deleteColumn = async (id: string, column: string) => {
   try {
     const confirmed = await showConfirmationDialog(`Are you sure you want to delete the column: \n${column} ?`)
     if (confirmed) {
-      useFetch(`/api/v1/column/${id}`, {
+      $fetch(`/api/v1/column/${id}`, {
         method: "DELETE",
         onResponse({ response }) {
           if (response.status == 200) {
@@ -133,6 +133,7 @@ const deleteColumn = async (id: string, column: string) => {
 }
 
 const allKnownDataKeys = ref<DataKeyItem[]>([
+  { value: "created_at", link: "" },
   { value: "default_branch.name", link: "" },
   { value: "default_branch.branch_protection_rule.pattern", link: "" },
   { value: "default_branch.branch_protection_rule.allows_deletion", link: "" },
@@ -159,6 +160,7 @@ const allKnownDataKeys = ref<DataKeyItem[]>([
   { value: "is_empty", link: "" },
   { value: "is_locked", link: "" },
   { value: "is_private", link: "" },
+  { value: "last_committed_at", link: "" },
   { value: "merge_commit_allowed", link: "" },
   { value: "name", link: "" },
   { value: "owner.login", link: "" },
@@ -167,7 +169,7 @@ const allKnownDataKeys = ref<DataKeyItem[]>([
   { value: "rebase_merge_allowed", link: "" },
   { value: "refs.total_count", link: "" },
   { value: "squash_merge_allowed", link: "" },
-  { value: "default_branch.target.commit.history.total_count", link: "" },
+  { value: "updated_at", link: "" }
 ])
 
 interface DataKeyItem {
@@ -191,7 +193,7 @@ const columnDataKeys = (queryString: string, cb: any) => {
 }
 
 const addColumn = () => {
-  useFetch("/api/v1/columns", {
+  $fetch("/api/v1/columns", {
     method: "POST",
     onResponse({ response }) {
       if (response.status == 200) {
@@ -287,6 +289,9 @@ onMounted(() => {
             <el-option key="array"
                        label="Array"
                        value="array" />
+            <el-option key="date"
+                       label="Date"
+                       value="date" />
           </el-select>
           <el-input v-model="element.description"
                     class="w-60 m-2"
@@ -308,12 +313,14 @@ onMounted(() => {
                        class="m-2"
                        size="large"
                        border
+                       v-if="element.type != 'date'"
                        @change="columnChanged(index)" />
           <el-checkbox v-model="element.filter_expanded"
                        label="Expanded in filters?"
                        class="m-2"
                        size="large"
                        border
+                       v-if="element.type != 'date'"
                        @change="columnChanged(index)" />
           <el-checkbox v-model="element.csv"
                        label="Included in exported CSV?"
