@@ -10,8 +10,10 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/spf13/cast"
 	"github.com/tidwall/gjson"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 
 	"github.com/eekwong/git-security/cmd/git-security/config"
@@ -19,8 +21,15 @@ import (
 )
 
 type Filter struct {
+	Type   string        `query:"type"`
 	Field  string        `query:"field"`
 	Values []interface{} `query:"values"`
+	Negate bool          `query:"negate"`
+}
+
+type NameCount struct {
+	Name  interface{} `bson:"_id" json:"name"`
+	Count int         `bson:"count" json:"count"`
 }
 
 func (a *api) GetRepositories(c *fiber.Ctx) error {
@@ -45,7 +54,23 @@ func (a *api) GetRepositories(c *fiber.Ctx) error {
 		},
 	}
 	for _, filter := range b.Filters {
-		filters = append(filters, bson.E{Key: filter.Field, Value: bson.M{"$in": filter.Values}})
+		if filter.Type == "array" {
+			values := bson.A{}
+			for _, v := range filter.Values {
+				values = append(values, bson.M{filter.Field: v})
+			}
+			if filter.Negate {
+				filters = append(filters, bson.E{Key: "$nor", Value: values})
+			} else {
+				filters = append(filters, bson.E{Key: "$or", Value: values})
+			}
+		} else {
+			if filter.Negate {
+				filters = append(filters, bson.E{Key: filter.Field, Value: bson.M{"$nin": filter.Values}})
+			} else {
+				filters = append(filters, bson.E{Key: filter.Field, Value: bson.M{"$in": filter.Values}})
+			}
+		}
 	}
 	cursor, err := a.db.Collection("repositories").Find(a.ctx, filters)
 	if err != nil {
@@ -110,6 +135,7 @@ func (a *api) GetRepositoriesGroupBy(c *fiber.Ctx) error {
 	}
 
 	b := struct {
+		Type    string   `json:"type"`
 		Filters []Filter `json:"filters"`
 	}{}
 	if err := c.BodyParser(&b); err != nil {
@@ -123,7 +149,23 @@ func (a *api) GetRepositoriesGroupBy(c *fiber.Ctx) error {
 		},
 	}
 	for _, filter := range b.Filters {
-		filters = append(filters, bson.E{Key: filter.Field, Value: bson.M{"$in": filter.Values}})
+		if filter.Type == "array" {
+			values := bson.A{}
+			for _, v := range filter.Values {
+				values = append(values, bson.M{filter.Field: v})
+			}
+			if filter.Negate {
+				filters = append(filters, bson.E{Key: "$nor", Value: values})
+			} else {
+				filters = append(filters, bson.E{Key: "$or", Value: values})
+			}
+		} else {
+			if filter.Negate {
+				filters = append(filters, bson.E{Key: filter.Field, Value: bson.M{"$nin": filter.Values}})
+			} else {
+				filters = append(filters, bson.E{Key: filter.Field, Value: bson.M{"$in": filter.Values}})
+			}
+		}
 	}
 
 	matchStage := bson.D{{Key: "$match", Value: filters}}
@@ -147,14 +189,36 @@ func (a *api) GetRepositoriesGroupBy(c *fiber.Ctx) error {
 		return err
 	}
 
-	var nameCounts []struct {
-		Name  interface{} `bson:"_id" json:"name"`
-		Count int         `bson:"count" json:"count"`
-	}
+	var nameCounts []NameCount
 	if err := cursor.All(a.ctx, &nameCounts); err != nil {
 		return err
 	}
 	defer cursor.Close(a.ctx)
+
+	// further processing to flatten the array
+	if b.Type == "array" {
+		flattened := make([]NameCount, 0)
+		dedup := make(map[string]int)
+		for _, nc := range nameCounts {
+			if nc.Name != nil {
+				if names, ok := nc.Name.(primitive.A); ok {
+					for _, name := range names {
+						name := cast.ToString(name)
+						if _, ok := dedup[name]; !ok {
+							dedup[name] = 0
+						}
+						dedup[name] += nc.Count
+					}
+				}
+			} else {
+				flattened = append(flattened, nc)
+			}
+		}
+		for name, count := range dedup {
+			flattened = append(flattened, NameCount{Name: name, Count: count})
+		}
+		return c.JSON(flattened)
+	}
 
 	return c.JSON(nameCounts)
 }

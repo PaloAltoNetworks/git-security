@@ -194,10 +194,9 @@ func (app *GitSecurityApp) runCustom() error {
 				case "array":
 					var arr []string
 					json.Unmarshal([]byte(cast.ToString(result)), &arr)
-					r := strings.Join(arr, "|")
-					if v, ok := repo.Customs[custom.Field]; !ok || v != r {
+					if v, ok := repo.Customs[custom.Field]; !ok || v != &arr {
 						hasUpdate = true
-						repo.Customs[custom.Field] = r
+						repo.Customs[custom.Field] = arr
 					}
 				}
 

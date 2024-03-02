@@ -29,6 +29,8 @@ type ColumnConfig = {
 
 const loading = ref(false)
 const filters = ref<Record<string, string[]>>({})
+const negates = ref<Record<string, boolean>>({})
+const types = <Record<string, string>>{}
 const filtersOrder = ref([])
 const updateFilters = (field: string) => {
   fetchRepos()
@@ -39,8 +41,10 @@ const transform = (f: Record<string, string[]>) => {
   for (let filter in f) {
     if (f[filter].length > 0) {
       results.push({
+        type: types[filter],
         field: filter,
         values: f[filter],
+        negate: negates.value[filter] || false
       })
     }
   }
@@ -226,6 +230,7 @@ const fetchColumns = () => {
       response._data.forEach((cc: ColumnConfig) => {
         if (cc.filter) {
           filterCCs.push(cc)
+          types[cc.key] = cc.type
         }
         if (cc.show) {
           let c: Column<any> = {
@@ -249,7 +254,7 @@ const fetchColumns = () => {
                 }
               )
             } else if (cc.type == "array") {
-              return cellData ? cellData.split("|").map((cd: string) => {
+              return cellData && Array.isArray(cellData) ? cellData.map((cd: string) => {
                 return h("div", {}, cd)
               }) : ""
             } else if (cc.type == "date") {
@@ -513,6 +518,7 @@ onMounted(() => {
                   :field="c.key"
                   :expand="c.filter_expanded"
                   :filters="filters"
+                  :negates="negates"
                   :filtersOrder="filtersOrder"
                   @updateFilters="updateFilters"
                   :disabled="loading" />

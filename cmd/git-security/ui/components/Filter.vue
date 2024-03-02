@@ -2,8 +2,10 @@
 import { Search } from '@element-plus/icons-vue'
 
 type Filter = {
+  type: string
   field: string
   values: any[]
+  negate: boolean
 }
 
 type Item = {
@@ -16,6 +18,7 @@ const props = defineProps({
   title: String,
   field: String,
   filters: Object,
+  negates: Object,
   filtersOrder: {
     type: Array as PropType<Filter[]>,
     required: true,
@@ -26,6 +29,7 @@ const props = defineProps({
 const emit = defineEmits(['updateFilters'])
 
 var checked = 0
+var negateHistory = false
 const collapse = ref("")
 const items = ref<Item[]>([])
 const orderBy = ref(0) // 0: A-Z, 1: Z-A, 2, 9-1, 3: 1-9
@@ -36,7 +40,7 @@ const searchedItems = ref<Item[]>([])
 const searchedItemsChecked = ref<Item[]>([])
 const searchedItemsUnchecked = ref<Item[]>([])
 
-watch([props.filters], () => {
+watch([props.filters, props.negates], () => {
   // set a timeout here to run the parent eventhandler first
   setTimeout(() => {
     fetchFilters()
@@ -78,6 +82,7 @@ const fetchFilters = async () => {
   await $fetch(`/api/v1/repos/${props.field}`, {
     method: "POST",
     body: {
+      type: props.type,
       filters: filters
     },
     onResponse({ response }) {
@@ -95,6 +100,7 @@ const checkboxChanged = () => {
   let filtersOrder = props.filtersOrder
   let filters = props.filters
   let values = props.filters![props.field!]
+  let negate = props.negates![props.field!]
 
   // search if it exists
   let index = -1
@@ -108,7 +114,7 @@ const checkboxChanged = () => {
   if (values.length > 0) {
     if (index >= 0) {
       // need to detect whether it's removal
-      if (checked > values.length) {
+      if (checked > values.length || negateHistory != negate) {
         // remove all the entries in filters
         for (let i = index + 1; i < filtersOrder.length; i++) {
           delete filters![filtersOrder[i].field]
@@ -116,14 +122,20 @@ const checkboxChanged = () => {
         // remove all the things behind index in filtersOrder
         filtersOrder.splice(index + 1)
       }
+      negateHistory = negate
       filtersOrder[index] = {
+        type: props.type!,
         field: props.field!,
-        values: values
+        values: values,
+        negate: negate
       }
     } else {
+      negateHistory = negate
       filtersOrder.push({
+        type: props.type!,
         field: props.field!,
-        values: values
+        values: values,
+        negate: negate
       })
     }
   } else {
@@ -132,6 +144,7 @@ const checkboxChanged = () => {
       delete filters![filtersOrder[i].field]
     }
     filtersOrder.splice(index)
+    props.negates![props.field!] = false
   }
   checked = values.length
   emit('updateFilters', props.field)
@@ -163,17 +176,7 @@ const sortFilters = () => {
 }
 
 const negateSelection = () => {
-  if (props.filters![props.field!] != undefined) {
-    for (let i = 0; i < searchedItemsChecked.value.length; i++) {
-      const item = searchedItemsChecked.value[i]
-      const index = props.filters![props.field!].indexOf(item.name)
-      props.filters![props.field!].splice(index, 1)
-    }
-    props.filters![props.field!] = props.filters![props.field!].concat(searchedItemsUnchecked.value.map(item => item.name))
-  }
-  else {
-    props.filters![props.field!] = searchedItems.value.map(item => item.name)
-  }
+  props.negates![props.field!] = !props.negates![props.field!]
   checkboxChanged()
 }
 
@@ -183,6 +186,7 @@ const clearSelection = () => {
     const index = props.filters![props.field!].indexOf(item.name)
     props.filters![props.field!].splice(index, 1)
   }
+  props.negates![props.field!] = false
   checkboxChanged()
 }
 
@@ -245,10 +249,12 @@ onMounted(async () => {
                variant="ghost"
                @click="changeOrderCount"
                :class="{ fade: orderBy < 2 }" />
-      <UButton icon="i-fa6-solid-arrows-up-down"
+      <UButton icon="i-fa6-solid-exclamation"
                color="gray"
                variant="ghost"
-               @click="negateSelection" />
+               @click="negateSelection"
+               :class="{ fade: !props.negates![props.field!] }"
+               :disabled="props.filters![field!] == undefined || props.filters![field!].length == 0" />
       <UButton v-if="searchedItemsChecked.length == searchedItems.length"
                icon="i-fa6-solid-trash-can"
                color="gray"
