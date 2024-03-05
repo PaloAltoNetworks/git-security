@@ -18,9 +18,9 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
-	"github.com/eekwong/git-security/cmd/git-security/api"
-	"github.com/eekwong/git-security/cmd/git-security/config"
-	gh "github.com/eekwong/git-security/cmd/git-security/github"
+	"github.com/PaloAltoNetworks/git-security/cmd/git-security/api"
+	"github.com/PaloAltoNetworks/git-security/cmd/git-security/config"
+	gh "github.com/PaloAltoNetworks/git-security/cmd/git-security/github"
 )
 
 type Opts struct {

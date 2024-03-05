@@ -10,7 +10,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
-	"github.com/eekwong/git-security/cmd/git-security/config"
+	"github.com/PaloAltoNetworks/git-security/cmd/git-security/config"
 )
 
 func (a *api) GetColumns(c *fiber.Ctx) error {

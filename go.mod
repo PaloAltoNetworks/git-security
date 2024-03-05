@@ -1,4 +1,4 @@
-module github.com/eekwong/git-security
+module github.com/PaloAltoNetworks/git-security
 
 go 1.22.0
 

@@ -22,7 +22,7 @@ clean: ## Clean all artifacts
 
 .PHONY: run
 run: ## Run git-security
-	go run github.com/eekwong/git-security/cmd/git-security
+	go run github.com/PaloAltoNetworks/git-security/cmd/git-security
 
 .PHONY: build
 build: go ui ## Build git-security
@@ -32,7 +32,7 @@ go: ## Build go binary only
 	@echo "+ $@"
 	go build -a \
 		-ldflags "$(LDFLAGS)" \
-		-o dist/git-security github.com/eekwong/git-security/cmd/git-security
+		-o dist/git-security github.com/PaloAltoNetworks/git-security/cmd/git-security
 
 .PHONY: ui
 ui: ## Build UI only

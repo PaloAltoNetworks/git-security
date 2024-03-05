@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/eekwong/git-security/cmd/git-security/service"
+	"github.com/PaloAltoNetworks/git-security/cmd/git-security/service"
 	flag "github.com/eekwong/go-common-flags"
 	"github.com/eekwong/go-interruptible-service"
 	"github.com/urfave/cli/v2"

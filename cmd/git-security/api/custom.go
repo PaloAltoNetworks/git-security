@@ -10,8 +10,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 
-	"github.com/eekwong/git-security/cmd/git-security/config"
-	"github.com/eekwong/git-security/cmd/git-security/security"
+	"github.com/PaloAltoNetworks/git-security/cmd/git-security/config"
+	"github.com/PaloAltoNetworks/git-security/cmd/git-security/security"
 )
 
 func (a *api) GetCustoms(c *fiber.Ctx) error {

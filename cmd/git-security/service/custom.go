@@ -20,8 +20,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
-	"github.com/eekwong/git-security/cmd/git-security/config"
-	"github.com/eekwong/git-security/cmd/git-security/security"
+	"github.com/PaloAltoNetworks/git-security/cmd/git-security/config"
+	"github.com/PaloAltoNetworks/git-security/cmd/git-security/security"
 )
 
 func (app *GitSecurityApp) runCustom() error {

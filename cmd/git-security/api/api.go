@@ -13,7 +13,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/compress"
 	"go.mongodb.org/mongo-driver/mongo"
 
-	gh "github.com/eekwong/git-security/cmd/git-security/github"
+	gh "github.com/PaloAltoNetworks/git-security/cmd/git-security/github"
 )
 
 type api struct {

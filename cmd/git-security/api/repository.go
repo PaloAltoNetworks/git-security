@@ -16,8 +16,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 
-	"github.com/eekwong/git-security/cmd/git-security/config"
-	gh "github.com/eekwong/git-security/cmd/git-security/github"
+	"github.com/PaloAltoNetworks/git-security/cmd/git-security/config"
+	gh "github.com/PaloAltoNetworks/git-security/cmd/git-security/github"
 )
 
 type Filter struct {
