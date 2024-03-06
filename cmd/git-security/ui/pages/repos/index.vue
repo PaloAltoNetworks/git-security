@@ -442,6 +442,12 @@ const actions = [
       click: () => actionAPI("/api/v1/repos/action/allows-deletions", "Allow Deletions")
     }
   ],
+  [
+    {
+      label: 'Admin Enforced: enabled',
+      click: () => actionAPI("/api/v1/repos/action/admin-enforced", "Admin Enforced")
+    }
+  ],
 ]
 
 const handleWebSocketMessage = (event: MessageEvent) => {

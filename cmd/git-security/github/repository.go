@@ -219,6 +219,10 @@ func (ghi *GitHubImpl) UpdateBranchProtectionRule(branchProtectionRuleID, field 
 		if v, ok := value.(bool); ok {
 			input.AllowsDeletions = githubv4.NewBoolean(githubv4.Boolean(v))
 		}
+	case "IsAdminEnforced":
+		if v, ok := value.(bool); ok {
+			input.IsAdminEnforced = githubv4.NewBoolean(githubv4.Boolean(v))
+		}
 	}
 
 	return ghi.gqlClient.Mutate(ghi.ctx, &m, input, nil)

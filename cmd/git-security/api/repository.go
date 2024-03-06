@@ -357,6 +357,10 @@ func (a *api) AllowsDeletions(c *fiber.Ctx) error {
 	return a.updateBranchProtectionRule(c, "AllowsDeletions", false)
 }
 
+func (a *api) IsAdminEnforced(c *fiber.Ctx) error {
+	return a.updateBranchProtectionRule(c, "IsAdminEnforced", true)
+}
+
 func (a *api) updateRepository(repo *gh.Repository) error {
 
 	updatedRepo, err := a.g.GetRepo(repo.Owner.Login, repo.Name)

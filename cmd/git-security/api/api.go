@@ -92,6 +92,7 @@ func NewFiberApp(
 	v1.Post("/repos/action/requires-conversation-resolution", a.RequiresConversationResolution)
 	v1.Post("/repos/action/allows-force-pushes", a.AllowsForcePushes)
 	v1.Post("/repos/action/allows-deletions", a.AllowsDeletions)
+	v1.Post("/repos/action/admin-enforced", a.IsAdminEnforced)
 	v1.Put("/column/:id", a.UpdateColumn)
 	v1.Put("/custom/:id", a.UpdateCustom)
 

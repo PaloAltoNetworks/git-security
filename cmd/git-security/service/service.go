@@ -297,47 +297,113 @@ func (app *GitSecurityApp) createDefaultColumns() error {
 			Filter:      true,
 		},
 		{
+			Type:        "integer",
+			Title:       "Approving Review Count?",
+			Description: "",
+			Key:         "default_branch.branch_protection_rule.required_approving_review_count",
+			Width:       150,
+			Show:        true,
+			Filter:      true,
+		},
+		{
+			Type:        "boolean",
+			Title:       "Dismiss Stale Reviews?",
+			Description: "",
+			Key:         "default_branch.branch_protection_rule.dismisses_stale_reviews",
+			Width:       150,
+			Show:        false,
+			Filter:      false,
+		},
+		{
+			Type:        "boolean",
+			Title:       "Requires Code Owner Reviews?",
+			Description: "",
+			Key:         "default_branch.branch_protection_rule.requires_code_owner_reviews",
+			Width:       150,
+			Show:        false,
+			Filter:      false,
+		},
+		{
+			Type:        "boolean",
+			Title:       "Conversation Resolution?",
+			Description: "",
+			Key:         "default_branch.branch_protection_rule.requires_conversation_resolution",
+			Width:       150,
+			Show:        false,
+			Filter:      false,
+		},
+		{
+			Type:        "boolean",
+			Title:       "Admin Enforced?",
+			Description: "",
+			Key:         "default_branch.branch_protection_rule.is_admin_enforced",
+			Width:       150,
+			Show:        false,
+			Filter:      false,
+		},
+		{
+			Type:        "boolean",
+			Title:       "Allow Force Pushes",
+			Description: "",
+			Key:         "default_branch.branch_protection_rule.allows_force_pushes",
+			Width:       150,
+			Show:        false,
+			Filter:      false,
+		},
+		{
+			Type:        "boolean",
+			Title:       "Allow Deletions?",
+			Description: "",
+			Key:         "default_branch.branch_protection_rule.allows_deletion",
+			Width:       150,
+			Show:        false,
+			Filter:      false,
+		},
+		{
 			Type:        "boolean",
 			Title:       "Signed commits?",
 			Description: "",
 			Key:         "default_branch.branch_protection_rule.requires_commit_signatures",
 			Width:       150,
-			Show:        true,
-			Filter:      true,
+			Show:        false,
+			Filter:      false,
 		},
 	}
 
-	// check if this is blank columns collection
-	cursor, err := app.db.Collection("columns").Find(app.ctx, bson.D{})
-	if err != nil {
-		return err
-	}
-	var columns []config.Column
-	if err := cursor.All(app.ctx, &columns); err != nil {
-		return err
-	}
-	cursor.Close(app.ctx)
-	if len(columns) > 0 {
-		return nil
+	var col config.Column
+	if err := app.db.Collection("columns").FindOne(
+		app.ctx,
+		bson.D{},
+		options.FindOne().SetSort(bson.D{{Key: "order", Value: -1}}),
+	).Decode(&col); err != nil {
+		if err != mongo.ErrNoDocuments {
+			return err
+		}
 	}
 
-	o, _ := lexorank.Rank("", "")
-	for _, c := range defaultColumns {
-		c.Order = o
-		// TODO: wait for new FerretDB release
-		// filter := bson.D{{Key: "key", Value: c.Key}}
-		// update := bson.D{{Key: "$setOnInsert", Value: c}}
-		// _, err := app.db.Collection("columns").
-		// 	UpdateOne(app.ctx, filter, update, options.Update().SetUpsert(true))
-		// if err != nil {
-		// 	return err
-		// }
-		if _, err := app.db.Collection("columns").
-			InsertOne(app.ctx, c); err != nil {
-			slog.Error("error in insert column config")
+	o, _ := lexorank.Rank(col.Order, "")
+	for _, column := range defaultColumns {
+		column.Order = o
+
+		// Check if the column exists
+		err := app.db.Collection("columns").FindOne(app.ctx, bson.D{{Key: "key", Value: column.Key}}).Err()
+		if err != nil {
+			// ErrNoDocuments means that the filter did not match any documents in the collection
+			if err == mongo.ErrNoDocuments {
+				// If the column doesn't exist, insert it
+				_, err := app.db.Collection("columns").InsertOne(app.ctx, column)
+				if err != nil {
+					slog.Error("error in default column InsertOne", slog.String("error", err.Error()))
+					return err
+				}
+				o, _ = lexorank.Rank(o, "")
+			} else {
+				// If there's an error other than the column not existing, return the error
+				return err
+			}
 		}
-		o, _ = lexorank.Rank(o, "")
 	}
+
 	return nil
 }
 
