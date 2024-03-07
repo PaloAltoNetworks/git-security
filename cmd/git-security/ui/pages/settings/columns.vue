@@ -16,6 +16,8 @@ type ColumnConfig = {
   order: string
 }
 
+const collapsed = ref<Record<string, boolean>>({})
+
 const columns = ref<ColumnConfig[]>([])
 const fetchColumns = () => {
   $fetch("/api/v1/columns", {
@@ -24,6 +26,8 @@ const fetchColumns = () => {
       columns.value.splice(0)
       response._data.forEach((cc: ColumnConfig) => {
         columns.value.push(cc)
+        const storedState = sessionStorage.getItem(cc.id)
+        collapsed.value[cc.id] = storedState ? JSON.parse(storedState) : true
       })
     }
   })
@@ -216,6 +220,11 @@ const addColumn = () => {
   })
 }
 
+const toggleCollapse = (id: string) => {
+  collapsed.value[id] = !collapsed.value[id]
+  sessionStorage.setItem(id, JSON.stringify(collapsed.value[id]))
+}
+
 onMounted(() => {
   fetchColumns()
 })
@@ -241,12 +250,52 @@ onMounted(() => {
                class="column">
         <template #header>
           <div class="card-header">
-            <span>#{{ index + 1 }} {{ element.title }}</span>
-            <UIcon name="i-fa6-solid-align-justify"
-                   class="handle" />
+            <div>
+              <span class="title">#{{ index + 1 }} {{ element.title }}</span>
+              <el-checkbox v-model="element.show"
+                           label="Show in table?"
+                           class="m-2 m-3"
+                           size="large"
+                           border
+                           @change="columnChanged(index)" />
+              <el-checkbox v-model="element.filter"
+                           label="Show in filters?"
+                           class="m-2"
+                           size="large"
+                           border
+                           v-if="element.type != 'date'"
+                           @change="columnChanged(index)" />
+              <el-checkbox v-model="element.filter_expanded"
+                           label="Expanded in filters?"
+                           class="m-2"
+                           size="large"
+                           border
+                           v-if="element.type != 'date'"
+                           @change="columnChanged(index)" />
+              <el-checkbox v-model="element.csv"
+                           label="Included in exported CSV?"
+                           class="m-2"
+                           size="large"
+                           border
+                           @change="columnChanged(index)" />
+              <el-button type="danger"
+                         class="delete-button"
+                         circle
+                         plain
+                         @click="deleteColumn(element.id, element.title)">
+                <UIcon name="i-fa6-solid-trash-can" />
+              </el-button>
+            </div>
+            <div>
+              <UIcon :name="collapsed[element.id] ? 'i-fa6-solid-chevron-down' : 'i-fa6-solid-chevron-up'"
+                     class="handle"
+                     @click="toggleCollapse(element.id)" />
+              <UIcon name="i-fa6-solid-align-justify"
+                     class="handle" />
+            </div>
           </div>
         </template>
-        <div>
+        <div v-show="!collapsed[element.id]">
           <el-input v-model="element.title"
                     class="w-30 m-2"
                     :placeholder="element.title"
@@ -270,7 +319,7 @@ onMounted(() => {
             <template #prepend>Column Width</template>
           </el-input>
         </div>
-        <div>
+        <div v-show="!collapsed[element.id]">
           <el-select v-model="element.type"
                      class="w-30 m-2"
                      placeholder="Column Type"
@@ -301,41 +350,6 @@ onMounted(() => {
             <template #prepend>Description</template>
           </el-input>
         </div>
-        <div>
-          <el-checkbox v-model="element.show"
-                       label="Show in table?"
-                       class="m-2"
-                       size="large"
-                       border
-                       @change="columnChanged(index)" />
-          <el-checkbox v-model="element.filter"
-                       label="Show in filters?"
-                       class="m-2"
-                       size="large"
-                       border
-                       v-if="element.type != 'date'"
-                       @change="columnChanged(index)" />
-          <el-checkbox v-model="element.filter_expanded"
-                       label="Expanded in filters?"
-                       class="m-2"
-                       size="large"
-                       border
-                       v-if="element.type != 'date'"
-                       @change="columnChanged(index)" />
-          <el-checkbox v-model="element.csv"
-                       label="Included in exported CSV?"
-                       class="m-2"
-                       size="large"
-                       border
-                       @change="columnChanged(index)" />
-          <el-button type="danger"
-                     class="delete-button"
-                     circle
-                     plain
-                     @click="deleteColumn(element.id, element.title)">
-            <UIcon name="i-fa6-solid-trash-can" />
-          </el-button>
-        </div>
       </el-card>
     </template>
   </draggable>
@@ -348,8 +362,9 @@ onMounted(() => {
 }
 
 .delete-button {
-  float: right;
-  margin-top: 11px;
+  float: top;
+  margin-bottom: 5px;
+  margin-left: 9px;
 }
 
 .column {
@@ -358,7 +373,7 @@ onMounted(() => {
 
 .handle {
   float: right;
-  margin-top: 4px;
+  margin-top: 1px;
   margin-right: 10px;
   cursor: pointer;
 }
@@ -376,6 +391,22 @@ onMounted(() => {
 }
 
 .card-header {
+  display: flex;
   font-weight: bold;
+  align-items: center;
+  justify-content: space-between;
+  margin-left: 5px;
+}
+
+.el-card {
+  --el-card-padding: 0px;
+}
+
+.m-3 {
+  margin-left: 30px;
+}
+
+.title {
+  width: 100px;
 }
 </style>
