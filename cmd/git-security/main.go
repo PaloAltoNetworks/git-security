@@ -21,6 +21,7 @@ func main() {
 	flag.AddHttpsFlags(&flags)
 	flag.AddPostgresFlags(&flags)
 	flag.AddMongoFlags(&flags)
+	flag.AddOktaFlags(&flags)
 
 	flags = append(flags, &cli.BoolFlag{
 		Name:    "debug",
@@ -83,6 +84,7 @@ func main() {
 					Https:         flag.GetHttpsOpts(c),
 					Postgres:      flag.GetPostgresOpts(c),
 					Mongo:         flag.GetMongoOpts(c),
+					Okta:          flag.GetOktaOpts(c),
 					Key:           c.String("key"),
 					CACert:        c.String("cacert"),
 					DB:            c.String("db"),

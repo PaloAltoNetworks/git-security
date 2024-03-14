@@ -29,6 +29,7 @@ type Opts struct {
 	Https         *flag.HttpsOpts
 	Postgres      *flag.PostgresOpts
 	Mongo         *flag.MongoOpts
+	Okta          *flag.OktaOpts
 	Key           string
 	CACert        string
 	DB            string
@@ -128,7 +129,7 @@ func (app *GitSecurityApp) Run() (interruptible.Stop, error) {
 	}
 
 	// web server
-	fiberApp := api.NewFiberApp(ctx, app.db, app.g, app.key, app.opts.AdminUsername, app.opts.AdminPassword)
+	fiberApp := api.NewFiberApp(ctx, app.db, app.g, app.key, app.opts.AdminUsername, app.opts.AdminPassword, app.opts.Okta)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
