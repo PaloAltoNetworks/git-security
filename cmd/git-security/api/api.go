@@ -6,22 +6,29 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/basicauth"
 	"github.com/gofiber/fiber/v2/middleware/compress"
+	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/session"
+	"github.com/gofiber/fiber/v2/utils"
 	"go.mongodb.org/mongo-driver/mongo"
 
 	gh "github.com/PaloAltoNetworks/git-security/cmd/git-security/github"
+	flag "github.com/eekwong/go-common-flags"
 )
 
 type api struct {
-	ctx     context.Context
-	db      *mongo.Database
-	g       gh.GitHub
-	key     []byte
-	clients map[*websocket.Conn]bool
+	ctx      context.Context
+	db       *mongo.Database
+	g        gh.GitHub
+	key      []byte
+	clients  map[*websocket.Conn]bool
+	store    *session.Store
+	oktaOpts *flag.OktaOpts
 }
 
 func NewFiberApp(
@@ -31,30 +38,45 @@ func NewFiberApp(
 	key []byte,
 	adminUsername string,
 	adminPassword string,
+	oktaOpts *flag.OktaOpts,
 ) *fiber.App {
 	app := fiber.New()
 	app.Use(compress.New())
 
+	app.Use(cors.New())
+
+	store := session.New(session.Config{
+		Expiration:   time.Hour,
+		KeyLookup:    "cookie:session_id",
+		KeyGenerator: utils.UUID,
+	})
+
 	a := api{
-		ctx:     ctx,
-		db:      db,
-		g:       g,
-		key:     key,
-		clients: make(map[*websocket.Conn]bool),
+		ctx:      ctx,
+		db:       db,
+		g:        g,
+		key:      key,
+		clients:  make(map[*websocket.Conn]bool),
+		store:    store,
+		oktaOpts: oktaOpts,
 	}
 
 	app.Get("/ping", func(c *fiber.Ctx) error {
 		return c.SendString("pong")
 	})
 
-	app.Get("/logout", func(c *fiber.Ctx) error {
-		return c.SendStatus(fiber.StatusUnauthorized)
-	})
-	app.Use(basicauth.New(basicauth.Config{
-		Users: map[string]string{
-			adminUsername: adminPassword,
-		},
-	}))
+	if oktaOpts.IsEnabled() {
+		app.Get("/login", a.oktaLogin)
+		app.Get("/login/callback", a.oktaCallback)
+		app.Get("/logout", a.oktaLogout)
+		app.Use(a.oktaAuthenticator())
+	} else {
+		app.Use(basicauth.New(basicauth.Config{
+			Users: map[string]string{
+				adminUsername: adminPassword,
+			},
+		}))
+	}
 
 	app.Get("/ws", websocket.New(func(c *websocket.Conn) {
 		slog.Info("WebSocket connection established")

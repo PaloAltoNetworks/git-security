@@ -24,12 +24,7 @@ const isDark = computed({
 })
 
 const logout = () => {
-  $fetch(`/logout`, {
-    method: "GET",
-    onResponse() {
-      window.location.href = "/";
-    }
-  })
+  window.location.href = "/logout"
 }
 </script>
 
