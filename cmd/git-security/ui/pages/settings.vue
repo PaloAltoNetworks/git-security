@@ -29,6 +29,11 @@ const select = (index: string) => {
                    class="menu-icon" />
             <span>Custom Hooks</span>
           </el-menu-item>
+          <el-menu-item index="/settings/score">
+            <UIcon name="i-fa6-solid-calculator"
+                   class="menu-icon" />
+            <span>Repository Score</span>
+          </el-menu-item>
         </el-menu>
       </el-aside>
       <el-main>

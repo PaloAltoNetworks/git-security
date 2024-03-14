@@ -16,6 +16,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/session"
 	"github.com/gofiber/fiber/v2/utils"
 	"go.mongodb.org/mongo-driver/mongo"
+	"golang.org/x/sync/syncmap"
 
 	gh "github.com/PaloAltoNetworks/git-security/cmd/git-security/github"
 	flag "github.com/eekwong/go-common-flags"
@@ -26,7 +27,7 @@ type api struct {
 	db       *mongo.Database
 	g        gh.GitHub
 	key      []byte
-	clients  map[*websocket.Conn]bool
+	clients  syncmap.Map
 	store    *session.Store
 	oktaOpts *flag.OktaOpts
 }
@@ -56,7 +57,7 @@ func NewFiberApp(
 		db:       db,
 		g:        g,
 		key:      key,
-		clients:  make(map[*websocket.Conn]bool),
+		clients:  syncmap.Map{},
 		store:    store,
 		oktaOpts: oktaOpts,
 	}
@@ -80,9 +81,9 @@ func NewFiberApp(
 
 	app.Get("/ws", websocket.New(func(c *websocket.Conn) {
 		slog.Info("WebSocket connection established")
-		a.clients[c] = true
+		a.clients.Store(c, true)
 		defer func() {
-			delete(a.clients, c)
+			a.clients.Delete(c)
 			c.Close()
 		}()
 		for {
@@ -102,6 +103,7 @@ func NewFiberApp(
 	v1.Delete("/custom/:id", a.DeleteCustom)
 	v1.Get("/columns", a.GetColumns)
 	v1.Get("/customs", a.GetCustoms)
+	v1.Get("/globalsettings", a.GetGlobalSettings)
 	v1.Post("/columns", a.CreateColumn)
 	v1.Post("/customs", a.CreateCustom)
 	v1.Post("/columns/order", a.ChangeColumnsOrder)
@@ -117,6 +119,7 @@ func NewFiberApp(
 	v1.Post("/repos/action/admin-enforced", a.IsAdminEnforced)
 	v1.Put("/column/:id", a.UpdateColumn)
 	v1.Put("/custom/:id", a.UpdateCustom)
+	v1.Put("/globalsettings", a.UpdateGlobalSettings)
 
 	currentDir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
 	filesDir := filepath.Join(currentDir, "ui")
@@ -138,15 +141,18 @@ func (a *api) broadcastMessage(repo gh.Repository) {
 	}
 
 	// Broadcast the JSON string to all connected WebSocket clients
-	for client := range a.clients {
-		if err := client.WriteMessage(websocket.TextMessage, repoJson); err != nil {
-			slog.Error(
-				"error in socket WriteMessage",
-				slog.String("error", err.Error()),
-				slog.String("repo", repo.Name),
-			)
-			client.Close()
-			delete(a.clients, client)
+	a.clients.Range(func(k, v interface{}) bool {
+		if client, ok := k.(*websocket.Conn); ok {
+			if err := client.WriteMessage(websocket.TextMessage, repoJson); err != nil {
+				slog.Error(
+					"error in socket WriteMessage",
+					slog.String("error", err.Error()),
+					slog.String("repo", repo.Name),
+				)
+				client.Close()
+				a.clients.Delete(client)
+			}
 		}
-	}
+		return true
+	})
 }

@@ -1,15 +1,22 @@
 package gh
 
 import (
+	"encoding/json"
+	"log/slog"
 	"time"
 
+	"github.com/PaloAltoNetworks/git-security/cmd/git-security/config"
 	"github.com/shurcooL/githubv4"
+	"github.com/spf13/cast"
+	"github.com/tidwall/gjson"
 )
 
 type Repository struct {
 	*GqlRepository  `bson:"inline"`
 	Customs         map[string]interface{} `bson:"customs,omitempty" json:"customs,omitempty"`
 	GitHubHost      string                 `bson:"github_host,omitempty" json:"github_host,omitempty"`
+	Score           *int                   `bson:"score,omitempty" json:"score,omitempty"`
+	ScoreColor      *string                `bson:"score_color,omitempty" json:"score_color,omitempty"`
 	FetchedAt       time.Time              `bson:"fetched_at,omitempty" json:"fetched_at,omitempty"`
 	CustomRunAt     time.Time              `bson:"custom_run_at,omitempty" json:"custom_run_at,omitempty"`
 	LastCommittedAt time.Time              `bson:"last_committed_at" json:"last_committed_at"`
@@ -226,4 +233,99 @@ func (ghi *GitHubImpl) UpdateBranchProtectionRule(branchProtectionRuleID, field 
 	}
 
 	return ghi.gqlClient.Mutate(ghi.ctx, &m, input, nil)
+}
+
+func (repo *Repository) UpdateRepoScoreAndColor(gs *config.GlobalSettings) error {
+	b, err := json.Marshal(*repo)
+	if err != nil {
+		slog.Error("error in json.Marshal()", slog.String("error", err.Error()))
+		return err
+	}
+
+	score := 0
+	for _, weight := range gs.ScoreWeights {
+		hit := false
+		fieldValue := gjson.GetBytes(b, weight.Field)
+		if fieldValue.Exists() {
+			switch weight.Comparator {
+			case "==":
+				if fieldValue.Value() != nil {
+					switch v := fieldValue.Value().(type) {
+					case bool:
+						hit = v == cast.ToBool(weight.Arg)
+					case string:
+						hit = v == weight.Arg
+					case float64:
+						hit = v == cast.ToFloat64(weight.Arg)
+					}
+				} else {
+					hit = weight.Arg == ""
+				}
+			case "!=":
+				if fieldValue.Value() != nil {
+					switch v := fieldValue.Value().(type) {
+					case bool:
+						hit = v != cast.ToBool(weight.Arg)
+					case string:
+						hit = v != weight.Arg
+					case float64:
+						hit = v != cast.ToFloat64(weight.Arg)
+					}
+				} else {
+
+					hit = weight.Arg == ""
+				}
+			case "<":
+				if fieldValue.Value() != nil {
+					switch v := fieldValue.Value().(type) {
+					case string:
+						hit = v < weight.Arg
+					case float64:
+						hit = v < cast.ToFloat64(weight.Arg)
+					}
+				}
+			case "<=":
+				if fieldValue.Value() != nil {
+					switch v := fieldValue.Value().(type) {
+					case string:
+						hit = v <= weight.Arg
+					case float64:
+						hit = v <= cast.ToFloat64(weight.Arg)
+					}
+				}
+			case ">":
+				if fieldValue.Value() != nil {
+					switch v := fieldValue.Value().(type) {
+					case string:
+						hit = v > weight.Arg
+					case float64:
+						hit = v > cast.ToFloat64(weight.Arg)
+					}
+				}
+			case ">=":
+				if fieldValue.Value() != nil {
+					switch v := fieldValue.Value().(type) {
+					case string:
+						hit = v >= weight.Arg
+					case float64:
+						hit = v >= cast.ToFloat64(weight.Arg)
+					}
+				}
+			}
+		} else {
+			hit = weight.Arg == ""
+		}
+		if hit {
+			score += weight.Weight
+		}
+	}
+	repo.Score = &score
+	for _, sc := range gs.ScoreColors {
+		if score >= sc.Range[0] &&
+			(score < sc.Range[1] || score == 100 && sc.Range[1] == 100) {
+			repo.ScoreColor = &sc.Color
+			break
+		}
+	}
+	return nil
 }

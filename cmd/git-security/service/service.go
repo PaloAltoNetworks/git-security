@@ -421,7 +421,28 @@ func (app *GitSecurityApp) fetch() error {
 		if err != nil {
 			return err
 		}
+
+		// get score and colors
+		gs := config.GlobalSettings{
+			ScoreColors:  make([]config.ScoreColor, 0),
+			ScoreWeights: make([]config.ScoreWeight, 0),
+		}
+		if err := app.db.Collection("globalSettings").FindOne(
+			app.ctx,
+			bson.D{},
+		).Decode(&gs); err != nil {
+			if err != mongo.ErrNoDocuments {
+				return err
+			}
+		}
+
 		for _, repo := range repos {
+			// update score and color
+			err := repo.UpdateRepoScoreAndColor(&gs)
+			if err != nil {
+				continue
+			}
+
 			filter := bson.D{{Key: "id", Value: repo.ID}}
 			update := bson.D{{Key: "$set", Value: repo}}
 			_, err = app.db.Collection("repositories").
