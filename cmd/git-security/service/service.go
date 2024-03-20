@@ -383,9 +383,7 @@ func (app *GitSecurityApp) createDefaultColumns() error {
 	}
 
 	o, _ := lexorank.Rank(col.Order, "")
-	defaultColumnKeys := make(map[string]bool)
 	for _, column := range defaultColumns {
-		defaultColumnKeys[column.Key] = true
 		column.Order = o
 
 		// Check if the column exists
@@ -402,28 +400,6 @@ func (app *GitSecurityApp) createDefaultColumns() error {
 				o, _ = lexorank.Rank(o, "")
 			} else {
 				// If there's an error other than the column not existing, return the error
-				return err
-			}
-		}
-	}
-
-	var dbColumns []config.Column
-	cursor, err := app.db.Collection("columns").Find(app.ctx, bson.D{})
-	if err != nil {
-		return err
-	}
-	if err = cursor.All(app.ctx, &dbColumns); err != nil {
-		return err
-	}
-
-	// Check if each column in the database is in defaultColumn Map
-	for _, dbColumn := range dbColumns {
-		_, found := defaultColumnKeys[dbColumn.Key]
-		// If the column is not in defaultColumns Map, remove it from the database
-		if !found {
-			_, err := app.db.Collection("columns").DeleteOne(app.ctx, bson.D{{Key: "key", Value: dbColumn.Key}})
-			if err != nil {
-				slog.Error("error in column DeleteOne", slog.String("error", err.Error()))
 				return err
 			}
 		}
