@@ -8,6 +8,9 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/casbin/casbin/v2"
+	"github.com/casbin/casbin/v2/model"
+	mongodbadapter "github.com/casbin/mongodb-adapter/v3"
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/basicauth"
@@ -15,12 +18,40 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/session"
 	"github.com/gofiber/fiber/v2/utils"
+	"github.com/spf13/cast"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/sync/syncmap"
 
 	gh "github.com/PaloAltoNetworks/git-security/cmd/git-security/github"
 	flag "github.com/eekwong/go-common-flags"
 )
+
+const (
+	modelConf = `
+[request_definition]
+r = sub, obj, act
+
+[policy_definition]
+p = sub, obj, act
+
+[role_definition]
+g = _, _
+
+[policy_effect]
+e = some(where (p.eft == allow))
+
+[matchers]
+m = g(r.sub, "admin") || g(r.sub, p.sub) && keyMatch(r.obj, p.obj) && r.act == p.act
+`
+)
+
+var newPolicies = [][]string{
+	{"user", "/api/v1/repos", "POST"},
+	{"user", "/api/v1/repos/*", "POST"},
+	{"user", "/api/v1/columns", "GET"},
+	{"user", "/ws", "GET"},
+}
 
 type api struct {
 	ctx      context.Context
@@ -30,6 +61,7 @@ type api struct {
 	clients  syncmap.Map
 	store    *session.Store
 	oktaOpts *flag.OktaOpts
+	enforcer *casbin.Enforcer
 }
 
 func NewFiberApp(
@@ -37,8 +69,8 @@ func NewFiberApp(
 	db *mongo.Database,
 	g gh.GitHub,
 	key []byte,
-	adminUsername string,
-	adminPassword string,
+	adminUsernames []string,
+	adminPasswords []string,
 	oktaOpts *flag.OktaOpts,
 ) *fiber.App {
 	app := fiber.New()
@@ -66,17 +98,90 @@ func NewFiberApp(
 		return c.SendString("pong")
 	})
 
+	currentDir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
+	filesDir := filepath.Join(currentDir, "ui")
+
 	if oktaOpts.IsEnabled() {
 		app.Get("/login", a.oktaLogin)
 		app.Get("/login/callback", a.oktaCallback)
 		app.Get("/logout", a.oktaLogout)
 		app.Use(a.oktaAuthenticator())
+
+		app.Static("/", filesDir)
+
+		// casbin
+		// clear all policies
+		// RemovePolicies doesn't work with wildcard, we saw left over rules
+		if _, err := db.Collection("casbin_rule").DeleteMany(ctx, bson.D{{Key: "ptype", Value: "p"}}); err != nil {
+			slog.Error("error in deleting the policies", slog.String("error", err.Error()))
+			panic(err)
+		}
+
+		adapter, err := mongodbadapter.NewAdapterByDB(db.Client(), &mongodbadapter.AdapterConfig{
+			DatabaseName:   db.Name(),
+			CollectionName: "casbin_rule",
+		})
+		if err != nil {
+			slog.Error("error in creating mongodb casbin adapter", slog.String("err", err.Error()))
+			panic(err)
+		}
+		m, err := model.NewModelFromString(modelConf)
+		if err != nil {
+			slog.Error("error in creating casbin model from string", slog.String("err", err.Error()))
+			panic(err)
+		}
+		a.enforcer, err = casbin.NewEnforcer(m, adapter)
+		if err != nil {
+			slog.Error("error in creating Enforcer", slog.String("err", err.Error()))
+			panic(err)
+		}
+		a.enforcer.LoadPolicy()
+		if _, err := a.enforcer.AddPolicies(newPolicies); err != nil {
+			slog.Error("error in adding policies", slog.String("err", err.Error()))
+			panic(err)
+		}
+		for _, username := range adminUsernames {
+			slog.Info("adding admin", slog.String("username", username))
+			if _, err := a.enforcer.AddRoleForUser(username, "admin"); err != nil {
+				slog.Error("error in adding admins", slog.String("err", err.Error()))
+				panic(err)
+			}
+		}
+		a.enforcer.SavePolicy()
+
+		app.Use(func(c *fiber.Ctx) error {
+			sess, err := store.Get(c)
+			if err != nil || sess.Get("email") == nil || cast.ToString(sess.Get("email")) == "" {
+				return c.SendStatus(fiber.StatusForbidden)
+			}
+			r, err := a.enforcer.Enforce(
+				cast.ToString(sess.Get("email")),
+				string(c.Request().URI().Path()),
+				string(c.Request().Header.Method()),
+			)
+			if err != nil {
+				return c.SendStatus(fiber.StatusInternalServerError)
+			}
+			if !r {
+				return c.SendStatus(fiber.StatusForbidden)
+			}
+			return c.Next()
+		})
 	} else {
+		// check both slice length is the same
+		if len(adminUsernames) != len(adminPasswords) {
+			panic("admin usernames and passwords should have the same size")
+		}
+
+		users := make(map[string]string)
+		for idx, username := range adminUsernames {
+			users[username] = adminPasswords[idx]
+		}
 		app.Use(basicauth.New(basicauth.Config{
-			Users: map[string]string{
-				adminUsername: adminPassword,
-			},
+			Users: users,
 		}))
+
+		app.Static("/", filesDir)
 	}
 
 	app.Get("/ws", websocket.New(func(c *websocket.Conn) {
@@ -120,10 +225,6 @@ func NewFiberApp(
 	v1.Put("/column/:id", a.UpdateColumn)
 	v1.Put("/custom/:id", a.UpdateCustom)
 	v1.Put("/globalsettings", a.UpdateGlobalSettings)
-
-	currentDir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
-	filesDir := filepath.Join(currentDir, "ui")
-	app.Static("/", filesDir)
 
 	return app
 }

@@ -42,18 +42,18 @@ func main() {
 		EnvVars: []string{"GIT_SECURITY_CACERT"},
 	})
 
-	flags = append(flags, &cli.StringFlag{
-		Name:    "admin-username",
+	flags = append(flags, &cli.StringSliceFlag{
+		Name:    "admin-usernames",
 		Usage:   "basic auth admin username",
-		Value:   "admin",
-		EnvVars: []string{"GIT_SECURITY_ADMIN_USERNAME"},
+		Value:   cli.NewStringSlice("admin"),
+		EnvVars: []string{"GIT_SECURITY_ADMIN_USERNAMES"},
 	})
 
-	flags = append(flags, &cli.StringFlag{
-		Name:    "admin-password",
+	flags = append(flags, &cli.StringSliceFlag{
+		Name:    "admin-passwords",
 		Usage:   "basic auth admin password",
-		Value:   "changeme",
-		EnvVars: []string{"GIT_SECURITY_ADMIN_PASSWORD"},
+		Value:   cli.NewStringSlice("changeme"),
+		EnvVars: []string{"GIT_SECURITY_ADMIN_PASSWORDS"},
 	})
 
 	flags = append(flags, &cli.StringFlag{
@@ -79,17 +79,17 @@ func main() {
 
 			return interruptible.Run(service.New(
 				&service.Opts{
-					GitHub:        flag.GetGitHubOpts(c),
-					Http:          flag.GetHttpOpts(c),
-					Https:         flag.GetHttpsOpts(c),
-					Postgres:      flag.GetPostgresOpts(c),
-					Mongo:         flag.GetMongoOpts(c),
-					Okta:          flag.GetOktaOpts(c),
-					Key:           c.String("key"),
-					CACert:        c.String("cacert"),
-					DB:            c.String("db"),
-					AdminUsername: c.String("admin-username"),
-					AdminPassword: c.String("admin-password"),
+					GitHub:         flag.GetGitHubOpts(c),
+					Http:           flag.GetHttpOpts(c),
+					Https:          flag.GetHttpsOpts(c),
+					Postgres:       flag.GetPostgresOpts(c),
+					Mongo:          flag.GetMongoOpts(c),
+					Okta:           flag.GetOktaOpts(c),
+					Key:            c.String("key"),
+					CACert:         c.String("cacert"),
+					DB:             c.String("db"),
+					AdminUsernames: c.StringSlice("admin-usernames"),
+					AdminPasswords: c.StringSlice("admin-passwords"),
 				},
 			))
 		},

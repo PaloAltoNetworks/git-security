@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"path"
 	"time"
@@ -12,7 +13,6 @@ import (
 	"github.com/go-resty/resty/v2"
 	"github.com/gofiber/fiber/v2"
 	verifier "github.com/okta/okta-jwt-verifier-golang"
-	"github.com/rs/zerolog/log"
 	"github.com/spf13/cast"
 )
 
@@ -70,6 +70,7 @@ func (api *api) oktaLogout(c *fiber.Ctx) error {
 	idToken := cast.ToString(sess.Get("id_token"))
 	sess.Delete("id_token")
 	sess.Delete("access_token")
+	sess.Delete("email")
 	if err := sess.Save(); err != nil {
 		return err
 	}
@@ -104,17 +105,41 @@ func (api *api) oktaCallback(c *fiber.Ctx) error {
 
 	_, verificationError := api.verifyToken(exchange.IdToken)
 	if verificationError == nil {
+		// fetch profile
+		client := resty.New().
+			SetTimeout(30 * time.Second).
+			SetBaseURL(api.getHostPath()).
+			OnAfterResponse(func(c *resty.Client, resp *resty.Response) error {
+				if resp.IsError() {
+					return fmt.Errorf("status code: %d, response: %s", resp.StatusCode(), resp.String())
+				}
+				return nil
+			})
+
+		m := make(map[string]interface{})
+		if _, err := client.R().
+			SetHeaders(map[string]string{
+				"Authorization": "Bearer " + exchange.AccessToken,
+				"Accept":        "application/json",
+			}).
+			SetResult(&m).
+			Post("/v1/userinfo"); err != nil {
+			slog.Error("error in /v1/userinfo", slog.String("error", err.Error()))
+			return err
+		}
+
 		sess, err := api.store.Get(c)
 		if err != nil {
 			return err
 		}
 		sess.Set("id_token", exchange.IdToken)
 		sess.Set("access_token", exchange.AccessToken)
+		sess.Set("email", m["email"])
 		if err := sess.Save(); err != nil {
 			return err
 		}
 	} else {
-		log.Error().Err(verificationError).Msg("error in verifyToken")
+		slog.Error("error in verifyToken", slog.String("error", verificationError.Error()))
 	}
 
 	return c.Redirect("/", fiber.StatusMovedPermanently)
@@ -152,7 +177,7 @@ func (api *api) exchangeCode(code string) (Exchange, error) {
 		}).
 		SetResult(&exchange).
 		Post("/v1/token"); err != nil {
-		log.Error().Err(err).Msg("error in /v1/token")
+		slog.Error("error in /v1/token", slog.String("error", err.Error()))
 		return exchange, err
 	}
 	return exchange, nil
@@ -190,6 +215,20 @@ func (api *api) oktaAuthenticator() fiber.Handler {
 			c.Response().Header.Add("Cache-Control", "no-cache")
 			return c.Redirect("/login", fiber.StatusMovedPermanently)
 		}
+
+		// check if the user has any role, if not, by default assign them to "user"
+		email := cast.ToString(sess.Get("email"))
+		roles, err := api.enforcer.GetRolesForUser(email)
+		if err != nil {
+			return err
+		}
+		if len(roles) == 0 {
+			if _, err := api.enforcer.AddRoleForUser(email, "user"); err != nil {
+				return err
+			}
+			api.enforcer.SavePolicy()
+		}
+
 		return c.Next()
 	}
 }

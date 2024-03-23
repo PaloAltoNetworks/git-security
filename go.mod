@@ -5,6 +5,8 @@ go 1.22.0
 require (
 	github.com/FerretDB/FerretDB v1.20.1
 	github.com/IGLOU-EU/go-wildcard/v2 v2.0.2
+	github.com/casbin/casbin/v2 v2.71.1
+	github.com/casbin/mongodb-adapter/v3 v3.6.0
 	github.com/docker/docker v25.0.3+incompatible
 	github.com/eekwong/go-common-flags v0.0.0-20240315040634-2ecee3d5a43f
 	github.com/eekwong/go-interruptible-service v0.1.0
@@ -15,7 +17,6 @@ require (
 	github.com/google/go-github/v57 v57.0.0
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	github.com/okta/okta-jwt-verifier-golang v1.3.1
-	github.com/rs/zerolog v1.32.0
 	github.com/shurcooL/githubv4 v0.0.0-20240120211514-18a1ae0e79dc
 	github.com/spf13/cast v1.6.0
 	github.com/tidwall/gjson v1.17.1
@@ -23,10 +24,12 @@ require (
 	github.com/xissy/lexorank v0.0.1
 	go.mongodb.org/mongo-driver v1.14.0
 	golang.org/x/oauth2 v0.18.0
+	golang.org/x/sync v0.6.0
 )
 
 require (
 	github.com/AlekSi/pointer v1.2.0 // indirect
+	github.com/Knetic/govaluate v3.0.1-0.20171022003610-9aa49832a739+incompatible // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/SAP/go-hdb v1.8.7 // indirect
 	github.com/andybalholm/brotli v1.1.0 // indirect
@@ -112,7 +115,6 @@ require (
 	golang.org/x/exp v0.0.0-20240222234643-814bf88cf225 // indirect
 	golang.org/x/mod v0.16.0 // indirect
 	golang.org/x/net v0.22.0 // indirect
-	golang.org/x/sync v0.6.0 // indirect
 	golang.org/x/sys v0.18.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/time v0.5.0 // indirect

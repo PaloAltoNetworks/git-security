@@ -24,17 +24,17 @@ import (
 )
 
 type Opts struct {
-	GitHub        *flag.GitHubOpts
-	Http          *flag.HttpOpts
-	Https         *flag.HttpsOpts
-	Postgres      *flag.PostgresOpts
-	Mongo         *flag.MongoOpts
-	Okta          *flag.OktaOpts
-	Key           string
-	CACert        string
-	DB            string
-	AdminUsername string
-	AdminPassword string
+	GitHub         *flag.GitHubOpts
+	Http           *flag.HttpOpts
+	Https          *flag.HttpsOpts
+	Postgres       *flag.PostgresOpts
+	Mongo          *flag.MongoOpts
+	Okta           *flag.OktaOpts
+	Key            string
+	CACert         string
+	DB             string
+	AdminUsernames []string
+	AdminPasswords []string
 }
 
 type GitSecurityApp struct {
@@ -129,7 +129,7 @@ func (app *GitSecurityApp) Run() (interruptible.Stop, error) {
 	}
 
 	// web server
-	fiberApp := api.NewFiberApp(ctx, app.db, app.g, app.key, app.opts.AdminUsername, app.opts.AdminPassword, app.opts.Okta)
+	fiberApp := api.NewFiberApp(ctx, app.db, app.g, app.key, app.opts.AdminUsernames, app.opts.AdminPasswords, app.opts.Okta)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
