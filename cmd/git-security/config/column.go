@@ -14,4 +14,5 @@ type Column struct {
 	FilterExpanded bool               `bson:"filter_expanded" json:"filter_expanded"`
 	CSV            bool               `bson:"csv" json:"csv"`
 	Order          string             `bson:"order" json:"order"`
+	IsDefault      bool               `bson:"is_default" json:"is_default"`
 }

@@ -385,27 +385,62 @@ func (app *GitSecurityApp) createDefaultColumns() error {
 	o, _ := lexorank.Rank(col.Order, "")
 	for _, column := range defaultColumns {
 		column.Order = o
+		column.IsDefault = true
 
-		// Check if the column exists
-		err := app.db.Collection("columns").FindOne(app.ctx, bson.D{{Key: "key", Value: column.Key}}).Err()
-		if err != nil {
-			// ErrNoDocuments means that the filter did not match any documents in the collection
-			if err == mongo.ErrNoDocuments {
-				// If the column doesn't exist, insert it
-				_, err := app.db.Collection("columns").InsertOne(app.ctx, column)
-				if err != nil {
-					slog.Error("error in default column InsertOne", slog.String("error", err.Error()))
-					return err
-				}
-				o, _ = lexorank.Rank(o, "")
-			} else {
-				// If there's an error other than the column not existing, return the error
+		// Check if the column exists in the database
+		var existingColumn config.Column
+		err := app.db.Collection("columns").FindOne(
+			app.ctx,
+			bson.D{{Key: "key", Value: column.Key}},
+		).Decode(&existingColumn)
+
+		if err == mongo.ErrNoDocuments {
+			// If the column doesn't exist, insert it
+			_, err := app.db.Collection("columns").InsertOne(app.ctx, column)
+			if err != nil {
+				slog.Error("error in default column InsertOne", slog.String("error", err.Error()))
+				return err
+			}
+		} else if err != nil {
+			// If there's an error other than "no documents found", return the error
+			return err
+		} else {
+			// If the column exists, update it with the default column data
+			_, err := app.db.Collection("columns").UpdateOne(
+				app.ctx,
+				bson.D{{Key: "_id", Value: existingColumn.ID}},
+				bson.D{{Key: "$set", Value: column}},
+			)
+			if err != nil {
+				slog.Error("error updating default column", slog.String("error", err.Error()))
 				return err
 			}
 		}
+		o, _ = lexorank.Rank(o, "")
 	}
 
+	// Delete any default columns that are not in the defaultColumns array
+	existingKeys := getColumnKeys(defaultColumns)
+	_, err := app.db.Collection("columns").DeleteMany(
+		app.ctx,
+		bson.D{
+			{Key: "is_default", Value: true},
+			{Key: "key", Value: bson.D{{Key: "$nin", Value: existingKeys}}},
+		},
+	)
+	if err != nil {
+		slog.Error("error deleting default columns", slog.String("error", err.Error()))
+		return err
+	}
 	return nil
+}
+
+func getColumnKeys(columns []config.Column) []string {
+	keys := make([]string, len(columns))
+	for i, column := range columns {
+		keys[i] = column.Key
+	}
+	return keys
 }
 
 func (app *GitSecurityApp) fetch() error {
