@@ -369,6 +369,15 @@ func (app *GitSecurityApp) createDefaultColumns() error {
 			Show:        false,
 			Filter:      false,
 		},
+		{
+			Type:        "string",
+			Title:       "Repo Owner",
+			Description: "",
+			Key:         "repo_owner",
+			Width:       150,
+			Show:        true,
+			Filter:      false,
+		},
 	}
 
 	var col config.Column

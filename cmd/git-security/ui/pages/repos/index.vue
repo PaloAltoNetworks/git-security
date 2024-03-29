@@ -16,7 +16,7 @@ import type {
 import { Loading as LoadingIcon } from "@element-plus/icons-vue";
 import Icon from "#ui/components/elements/Icon.vue";
 import UButton from "#ui/components/elements/Button.vue";
-import { showConfirmationDialog } from "@/common-functions";
+import { showConfirmationDialog, showNotification } from "@/common-functions";
 
 type ColumnType = "string" | "number" | "boolean" | "array" | "date";
 type ColumnConfig = {
@@ -419,19 +419,9 @@ const actionAPI = async (api: string, actionLabel: string) => {
         },
         onResponse: ({ response }) => {
           if (response.status == 200) {
-            ElNotification({
-              title: "Success",
-              message: "Operation success",
-              type: "success",
-              position: "bottom-right",
-            });
+            showNotification("success");
           } else {
-            ElNotification({
-              title: "Error",
-              message: "Internal error occurred",
-              type: "error",
-              position: "bottom-right",
-            });
+            showNotification("error");
           }
         },
       });
@@ -510,6 +500,68 @@ const actions = [
       label: "Admin Enforced: enabled",
       click: () =>
         actionAPI("/api/v1/repos/action/admin-enforced", "Admin Enforced"),
+    },
+  ],
+  [
+    {
+      label: " Update Owner ",
+      click: () => {
+        try {
+          ElMessageBox.prompt("Please enter the owner name", "Add Owner", {
+            confirmButtonText: "Submit",
+            cancelButtonText: "Cancel",
+          })
+            .then(({ value }) => {
+              if (value || value == null) {
+                $fetch("/api/v1/repos/action/repo-owner", {
+                  method: "POST",
+                  body: {
+                    ids: Array.from(repos_table.selected.keys()),
+                    ownerName: value,
+                  },
+                  onResponse: ({ response }) => {
+                    if (response.status == 200) {
+                      showNotification("success");
+                    } else {
+                      showNotification("error");
+                    }
+                  },
+                });
+              }
+            })
+            .catch((error) => {
+              console.error("An error occurred in Update Owner:", error);
+            });
+        } catch (error) {
+          console.error("An error occurred:", error);
+        }
+      },
+    },
+    {
+      label: "  Delete Owner",
+      click: async () => {
+        try {
+          const confirmed = await showConfirmationDialog(
+            `Are you sure you want to delete the owner for selected repos ?`
+          );
+          if (confirmed) {
+            var ids = Array.from(repos_table.selected.keys());
+            ids = [ids.join(",")];
+            $fetch(`/api/v1/repos/action/delete-owner/${ids}`, {
+              method: "DELETE",
+              onResponse: ({ response }) => {
+                if (response.status == 200) {
+                  showNotification("success");
+                } else {
+                  showNotification("error");
+                }
+              },
+            });
+          }
+        } catch (error) {
+          console.error("An error occurred:", error);
+        }
+      },
     },
   ],
 ];
