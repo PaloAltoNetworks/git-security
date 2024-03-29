@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -387,4 +388,106 @@ func (a *api) updateRepository(repo *gh.Repository) error {
 	}
 	a.broadcastMessage(*updatedRepo)
 	return nil
+}
+
+func (a *api) AddRepoOwner(c *fiber.Ctx) error {
+	// Parse the owner name from the request body
+	b := struct {
+		OwnerName string   `json:"ownerName"`
+		IDs       []string `json:"ids"`
+	}{}
+	if err := c.BodyParser(&b); err != nil {
+		return err
+	}
+
+	// Find the repositories with the given IDs
+	cursor, err := a.db.Collection("repositories").Find(a.ctx, bson.D{
+		bson.E{
+			Key:   "id",
+			Value: bson.M{"$in": b.IDs},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	defer cursor.Close(a.ctx)
+
+	// Update the owner of each repository
+	for cursor.Next(a.ctx) {
+		var repo gh.Repository
+		if err := cursor.Decode(&repo); err != nil {
+			return err
+		}
+
+		// Update the owner in the database
+		filter := bson.D{{Key: "id", Value: repo.ID}}
+		update := bson.D{{Key: "$set", Value: bson.D{{Key: "repo_owner", Value: b.OwnerName}}}}
+		if _, err := a.db.Collection("repositories").UpdateOne(a.ctx, filter, update); err != nil {
+			slog.Error(
+				"error in updating the database",
+				slog.String("error", err.Error()),
+				slog.String("repo", repo.Name),
+			)
+			return err
+		}
+		repo.RepoOwner = b.OwnerName
+		a.broadcastMessage(repo)
+	}
+
+	if err := cursor.Err(); err != nil {
+		return err
+	}
+
+	return c.SendStatus(200)
+}
+
+func (a *api) DeleteRepoOwner(c *fiber.Ctx) error {
+	// Parse the IDs
+	idsParam := c.Params("ids")
+	if idsParam == "" {
+		return c.SendStatus(fiber.StatusBadRequest)
+	}
+
+	ids := strings.Split(idsParam, ",")
+
+	// Find the repositories with the given IDs
+	cursor, err := a.db.Collection("repositories").Find(a.ctx, bson.D{
+		bson.E{
+			Key:   "id",
+			Value: bson.M{"$in": ids},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	defer cursor.Close(a.ctx)
+
+	// Remove the owner of each repository
+	for cursor.Next(a.ctx) {
+		var repo gh.Repository
+		if err := cursor.Decode(&repo); err != nil {
+			return err
+		}
+
+		// Remove the owner in the database
+		filter := bson.D{{Key: "id", Value: repo.ID}}
+		update := bson.D{{Key: "$unset", Value: bson.D{{Key: "repo_owner", Value: ""}}}}
+		if _, err := a.db.Collection("repositories").UpdateOne(a.ctx, filter, update); err != nil {
+			slog.Error(
+				"error in updating the database",
+				slog.String("error", err.Error()),
+				slog.String("repo", repo.Name),
+			)
+			return err
+		}
+
+		repo.RepoOwner = ""
+		a.broadcastMessage(repo)
+	}
+
+	if err := cursor.Err(); err != nil {
+		return err
+	}
+
+	return c.SendStatus(200)
 }
