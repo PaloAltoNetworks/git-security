@@ -376,7 +376,7 @@ func (app *GitSecurityApp) createDefaultColumns() error {
 			Key:         "repo_owner",
 			Width:       150,
 			Show:        true,
-			Filter:      false,
+			Filter:      true,
 		},
 	}
 

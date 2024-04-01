@@ -10,6 +10,7 @@ require (
 	github.com/docker/docker v25.0.3+incompatible
 	github.com/eekwong/go-common-flags v0.0.0-20240315040634-2ecee3d5a43f
 	github.com/eekwong/go-interruptible-service v0.1.0
+	github.com/emirpasic/gods v1.18.1
 	github.com/go-resty/resty/v2 v2.11.0
 	github.com/gofiber/contrib/websocket v1.3.0
 	github.com/gofiber/fiber/v2 v2.52.2

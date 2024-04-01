@@ -42,7 +42,7 @@ g = _, _
 e = some(where (p.eft == allow))
 
 [matchers]
-m = g(r.sub, "admin") || g(r.sub, p.sub) && keyMatch(r.obj, p.obj) && r.act == p.act
+m = g(r.sub, "admin") || g(r.sub, p.sub) && globMatch(r.obj, p.obj) && r.act == p.act
 `
 )
 
@@ -51,6 +51,14 @@ var newPolicies = [][]string{
 	{"user", "/api/v1/repos/*", "POST"},
 	{"user", "/api/v1/columns", "GET"},
 	{"user", "/ws", "GET"},
+	{"owneradmin", "/api/v1/repos/action/repo-owner", "POST"},
+	{"owneradmin", "/api/v1/repos/action/delete-owner/*", "DELETE"},
+}
+
+var rolesDefined = map[string]struct{}{
+	"admin":      {},
+	"user":       {},
+	"owneradmin": {},
 }
 
 type api struct {
@@ -101,6 +109,9 @@ func NewFiberApp(
 	currentDir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
 	filesDir := filepath.Join(currentDir, "ui")
 
+	// casbin
+	a.settingUpCasbinEnforcer()
+
 	if oktaOpts.IsEnabled() {
 		app.Get("/login", a.oktaLogin)
 		app.Get("/login/callback", a.oktaCallback)
@@ -109,37 +120,6 @@ func NewFiberApp(
 
 		app.Static("/", filesDir)
 
-		// casbin
-		// clear all policies
-		// RemovePolicies doesn't work with wildcard, we saw left over rules
-		if _, err := db.Collection("casbin_rule").DeleteMany(ctx, bson.D{{Key: "ptype", Value: "p"}}); err != nil {
-			slog.Error("error in deleting the policies", slog.String("error", err.Error()))
-			panic(err)
-		}
-
-		adapter, err := mongodbadapter.NewAdapterByDB(db.Client(), &mongodbadapter.AdapterConfig{
-			DatabaseName:   db.Name(),
-			CollectionName: "casbin_rule",
-		})
-		if err != nil {
-			slog.Error("error in creating mongodb casbin adapter", slog.String("err", err.Error()))
-			panic(err)
-		}
-		m, err := model.NewModelFromString(modelConf)
-		if err != nil {
-			slog.Error("error in creating casbin model from string", slog.String("err", err.Error()))
-			panic(err)
-		}
-		a.enforcer, err = casbin.NewEnforcer(m, adapter)
-		if err != nil {
-			slog.Error("error in creating Enforcer", slog.String("err", err.Error()))
-			panic(err)
-		}
-		a.enforcer.LoadPolicy()
-		if _, err := a.enforcer.AddPolicies(newPolicies); err != nil {
-			slog.Error("error in adding policies", slog.String("err", err.Error()))
-			panic(err)
-		}
 		for _, username := range adminUsernames {
 			slog.Info("adding admin", slog.String("username", username))
 			if _, err := a.enforcer.AddRoleForUser(username, "admin"); err != nil {
@@ -210,6 +190,8 @@ func NewFiberApp(
 	v1.Get("/columns", a.GetColumns)
 	v1.Get("/customs", a.GetCustoms)
 	v1.Get("/globalsettings", a.GetGlobalSettings)
+	v1.Get("/roles", a.GetRoles)
+	v1.Get("/users", a.GetUsers)
 	v1.Post("/columns", a.CreateColumn)
 	v1.Post("/customs", a.CreateCustom)
 	v1.Post("/columns/order", a.ChangeColumnsOrder)
@@ -227,8 +209,42 @@ func NewFiberApp(
 	v1.Put("/column/:id", a.UpdateColumn)
 	v1.Put("/custom/:id", a.UpdateCustom)
 	v1.Put("/globalsettings", a.UpdateGlobalSettings)
+	v1.Put("/user/:name", a.UpdateUserRoles)
 
 	return app
+}
+
+func (a *api) settingUpCasbinEnforcer() {
+	// clear all policies
+	// RemovePolicies doesn't work with wildcard, we saw left over rules
+	if _, err := a.db.Collection("casbin_rule").DeleteMany(a.ctx, bson.D{{Key: "ptype", Value: "p"}}); err != nil {
+		slog.Error("error in deleting the policies", slog.String("error", err.Error()))
+		panic(err)
+	}
+
+	adapter, err := mongodbadapter.NewAdapterByDB(a.db.Client(), &mongodbadapter.AdapterConfig{
+		DatabaseName:   a.db.Name(),
+		CollectionName: "casbin_rule",
+	})
+	if err != nil {
+		slog.Error("error in creating mongodb casbin adapter", slog.String("err", err.Error()))
+		panic(err)
+	}
+	m, err := model.NewModelFromString(modelConf)
+	if err != nil {
+		slog.Error("error in creating casbin model from string", slog.String("err", err.Error()))
+		panic(err)
+	}
+	a.enforcer, err = casbin.NewEnforcer(m, adapter)
+	if err != nil {
+		slog.Error("error in creating Enforcer", slog.String("err", err.Error()))
+		panic(err)
+	}
+	a.enforcer.LoadPolicy()
+	if _, err := a.enforcer.AddPolicies(newPolicies); err != nil {
+		slog.Error("error in adding policies", slog.String("err", err.Error()))
+		panic(err)
+	}
 }
 
 func (a *api) broadcastMessage(repo gh.Repository) {
