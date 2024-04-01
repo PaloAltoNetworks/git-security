@@ -20,7 +20,7 @@ type Repository struct {
 	FetchedAt       time.Time              `bson:"fetched_at,omitempty" json:"fetched_at,omitempty"`
 	CustomRunAt     time.Time              `bson:"custom_run_at,omitempty" json:"custom_run_at,omitempty"`
 	LastCommittedAt time.Time              `bson:"last_committed_at" json:"last_committed_at"`
-	RepoOwner       string                 `bson:"repo_owner" json:"repo_owner"`
+	RepoOwner       string                 `bson:"repo_owner,omitempty" json:"repo_owner,omitempty"`
 }
 
 type GqlRepository struct {
