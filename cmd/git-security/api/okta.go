@@ -70,7 +70,7 @@ func (api *api) oktaLogout(c *fiber.Ctx) error {
 	idToken := cast.ToString(sess.Get("id_token"))
 	sess.Delete("id_token")
 	sess.Delete("access_token")
-	sess.Delete("email")
+	sess.Delete("username")
 	if err := sess.Save(); err != nil {
 		return err
 	}
@@ -134,7 +134,7 @@ func (api *api) oktaCallback(c *fiber.Ctx) error {
 		}
 		sess.Set("id_token", exchange.IdToken)
 		sess.Set("access_token", exchange.AccessToken)
-		sess.Set("email", m["email"])
+		sess.Set("username", m["email"])
 		if err := sess.Save(); err != nil {
 			return err
 		}
@@ -217,7 +217,7 @@ func (api *api) oktaAuthenticator() fiber.Handler {
 		}
 
 		// check if the user has any role, if not, by default assign them to "user"
-		email := cast.ToString(sess.Get("email"))
+		email := cast.ToString(sess.Get("username"))
 		roles, err := api.enforcer.GetRolesForUser(email)
 		if err != nil {
 			return err

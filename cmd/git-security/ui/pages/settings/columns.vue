@@ -272,12 +272,6 @@ onMounted(() => {
                            border
                            v-if="element.type != 'date'"
                            @change="columnChanged(index)" />
-              <el-checkbox v-model="element.csv"
-                           label="Included in exported CSV?"
-                           class="m-2"
-                           size="large"
-                           border
-                           @change="columnChanged(index)" />
               <el-button type="danger"
                          class="delete-button"
                          circle
@@ -410,3 +404,4 @@ onMounted(() => {
   width: 100px;
 }
 </style>
+
