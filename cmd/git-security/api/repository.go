@@ -86,6 +86,22 @@ func (a *api) GetRepositories(c *fiber.Ctx) error {
 	}
 
 	if q.CSV {
+		sess, err := a.store.Get(c)
+		if err != nil {
+			return err
+		}
+		username := cast.ToString(sess.Get("username"))
+
+		var uv config.UserView
+		if err := a.db.Collection("userviews").FindOne(
+			a.ctx,
+			bson.D{{Key: "username", Value: username}},
+		).Decode(&uv); err != nil {
+			if err != mongo.ErrNoDocuments {
+				return err
+			}
+		}
+
 		cursor, err := a.db.Collection("columns").Find(a.ctx, bson.D{})
 		if err != nil {
 			return err
@@ -95,12 +111,16 @@ func (a *api) GetRepositories(c *fiber.Ctx) error {
 			return err
 		}
 		defer cursor.Close(a.ctx)
+		columnsMap := make(map[string]config.Column)
+		for _, cc := range columns {
+			columnsMap[cc.ID.String()] = cc
+		}
 
 		records := [][]string{{
 			"Repo Name",
 		}}
-		for _, c := range columns {
-			if c.CSV {
+		for _, uvc := range uv.Columns {
+			if c, ok := columnsMap[uvc.String()]; ok {
 				records[0] = append(records[0], c.Title)
 			}
 		}
@@ -112,6 +132,11 @@ func (a *api) GetRepositories(c *fiber.Ctx) error {
 			values := []string{r.Name}
 			for _, c := range columns {
 				if c.CSV {
+					values = append(values, gjson.GetBytes(rjson, c.Key).String())
+				}
+			}
+			for _, uvc := range uv.Columns {
+				if c, ok := columnsMap[uvc.String()]; ok {
 					values = append(values, gjson.GetBytes(rjson, c.Key).String())
 				}
 			}

@@ -3,7 +3,6 @@ import {
   ElCheckbox,
   ElInput,
   ElLink,
-  ElNotification,
   TableV2FixedDir,
   TableV2SortOrder,
 } from "element-plus";
@@ -12,14 +11,28 @@ import type {
   Column,
   RowClassNameGetter,
   SortBy,
+  TransferDataItem,
 } from "element-plus";
 import { Loading as LoadingIcon } from "@element-plus/icons-vue";
 import Icon from "#ui/components/elements/Icon.vue";
 import UButton from "#ui/components/elements/Button.vue";
 import { showConfirmationDialog, showNotification } from "@/common-functions";
 
-type ColumnType = "string" | "number" | "boolean" | "array" | "date";
+interface Option {
+  key: string;
+  label: string;
+  disabled: boolean;
+}
+
+type ColumnType =
+  | "string"
+  | "number"
+  | "boolean"
+  | "array"
+  | "date"
+  | "reposcore";
 type ColumnConfig = {
+  id: string;
   type: ColumnType;
   title: string;
   description: string;
@@ -35,7 +48,7 @@ type ColumnConfig = {
 const loading = ref(false);
 const filters = ref<Record<string, string[]>>({});
 const negates = ref<Record<string, boolean>>({});
-const types = <Record<string, string>>{};
+const types = ref<Record<string, string>>({});
 const filtersOrder = ref([]);
 const updateFilters = (field: string) => {
   fetchRepos();
@@ -46,7 +59,7 @@ const transform = (f: Record<string, string[]>) => {
   for (let filter in f) {
     if (f[filter].length > 0) {
       results.push({
-        type: types[filter],
+        type: types.value[filter],
         field: filter,
         values: f[filter],
         negate: negates.value[filter] || false,
@@ -101,7 +114,7 @@ const exportToCSV = async () => {
   });
 };
 
-const columns: Column<any>[] = [
+const getDefaultColumns = (): Column<any>[] => [
   {
     key: "selection",
     width: 25,
@@ -154,30 +167,6 @@ const columns: Column<any>[] = [
     align: "center",
     fixed: TableV2FixedDir.LEFT,
     cellRenderer: ({ rowIndex }: any) => h("span", `${rowIndex + 1}`),
-  },
-  {
-    title: "Score",
-    key: "score",
-    dataKey: "score",
-    width: 50,
-    align: "center",
-    sortable: true,
-    fixed: TableV2FixedDir.LEFT,
-    cellRenderer: ({ cellData, rowData }) => {
-      return h(
-        "div",
-        {
-          style: {
-            padding: "5px 0",
-            "background-color": rowData["score_color"],
-            "border-radius": "50%",
-            width: "31px",
-            height: "31px",
-          },
-        },
-        h("div", {}, cellData)
-      );
-    },
   },
   {
     title: "Repo Name",
@@ -263,80 +252,42 @@ const columns: Column<any>[] = [
   },
 ];
 
-const filterCCs: ColumnConfig[] = [];
-const fetchColumns = () => {
+const uiData = reactive({
+  filterCCs: <ColumnConfig[]>[],
+  availableFilters: <ColumnConfigTransfer[]>[],
+  availableColumns: <ColumnConfigTransfer[]>[],
+  allCCsMap: <Record<string, ColumnConfig>>{},
+  checkedFilters: <string[]>[],
+  selectedFilters: <string[]>[],
+  checkedColumns: <string[]>[],
+  selectedColumns: <string[]>[],
+  selectedFiltersExpanded: <Record<string, boolean>>{},
+});
+
+const fetchAllColumns = () => {
   $fetch("/api/v1/columns", {
     method: "GET",
     onResponse({ response }) {
+      uiData.availableFilters = [];
+      uiData.availableColumns = [];
+      uiData.allCCsMap = {};
       response._data.forEach((cc: ColumnConfig) => {
-        if (cc.filter) {
-          filterCCs.push(cc);
-          types[cc.key] = cc.type;
+        if (cc.type != "date") {
+          uiData.availableFilters.push({
+            key: cc.id,
+            label: cc.title,
+          });
         }
-        if (cc.show) {
-          let c: Column<any> = {
-            title: cc.title,
-            key: cc.key,
-            dataKey: cc.key,
-            width: cc.width,
-            sortable: true,
-          };
-          if (cc.type != "string") {
-            c["align"] = "center";
-          }
+        uiData.availableColumns.push({
+          key: cc.id,
+          label: cc.title,
+        });
 
-          const getContent = (cellData: any) => {
-            if (cc.type == "boolean") {
-              return h(Icon, {
-                name: cellData ? "i-fa6-solid-check" : "i-fa6-solid-xmark",
-                style: cellData ? "color: green" : "color: red",
-              });
-            } else if (cc.type == "array") {
-              return cellData && Array.isArray(cellData)
-                ? cellData.map((cd: string) => {
-                    return h("div", {}, cd);
-                  })
-                : "";
-            } else if (cc.type == "date") {
-              return cellData != "0001-01-01T00:00:00Z"
-                ? h(
-                    "span",
-                    {
-                      title: useDayjs()(cellData).local().format(),
-                    },
-                    useDayjs()(cellData).fromNow()
-                  )
-                : h("span", "");
-            } else {
-              return h("span", cellData);
-            }
-          };
-          c["cellRenderer"] = ({ cellData }) =>
-            h(
-              "div",
-              {
-                style: { padding: "5px 0" },
-              },
-              getContent(cellData)
-            );
-
-          if (cc.description) {
-            const d = cc.description;
-            const t = cc.title;
-            c["headerCellRenderer"] = () => {
-              return h(
-                "div",
-                {
-                  class: "el-table-v2__header-cell-text",
-                  title: d,
-                },
-                h("span", t)
-              );
-            };
-          }
-          repos_table.columns.push(c);
-        }
+        uiData.allCCsMap[cc.id] = cc;
       });
+
+      uiData.availableFilters.sort((a, b) => a.label.localeCompare(b.label));
+      uiData.availableColumns.sort((a, b) => a.label.localeCompare(b.label));
 
       // workaround: https://github.com/element-plus/element-plus/issues/13968
       const tableLeft = document.querySelector(
@@ -365,6 +316,7 @@ const fetchColumns = () => {
         attributeFilter: ["style"],
       });
 
+      fetchUserView();
       fetchRepos();
     },
   });
@@ -377,7 +329,7 @@ const repos_table_search = reactive({
 const repos_table = reactive({
   selectedDeviceID: null,
   rowKey: "id",
-  columns: columns,
+  columns: getDefaultColumns(),
   originalData: [],
   data: <any>[],
   selected: new Map(),
@@ -591,9 +543,254 @@ const setupWebSocket = () => {
   };
 };
 
+const dialog = ref(false);
+const handleClose = () => {
+  dialog.value = false;
+};
+const onSubmit = () => {
+  var filters = [];
+  for (const f of uiData.selectedFilters) {
+    filters.push({
+      id: f,
+      filter_expanded:
+        f in uiData.selectedFiltersExpanded
+          ? uiData.selectedFiltersExpanded[f]
+          : false,
+    });
+  }
+  $fetch("/api/v1/userview", {
+    method: "PUT",
+    body: {
+      filters: filters,
+      columns: uiData.selectedColumns,
+    },
+    onResponse({ response }) {
+      fetchAllColumns();
+      dialog.value = false;
+    },
+  });
+};
+
+const renderFunc = (h: any, option: TransferDataItem) => {
+  if (uiData.selectedFilters.indexOf(option.key) > -1) {
+    return h("span", null, [
+      option.label,
+      h(UButton, {
+        onClick: (e: any) => {
+          e.stopPropagation();
+          if (uiData.selectedFiltersExpanded[option.key] == undefined) {
+            uiData.selectedFiltersExpanded[option.key] = false;
+          }
+          uiData.selectedFiltersExpanded[option.key] =
+            !uiData.selectedFiltersExpanded[option.key];
+        },
+        color: "gray",
+        circle: true,
+        variant: "ghost",
+        size: "sm",
+        icon: uiData.selectedFiltersExpanded[option.key]
+          ? "i-heroicons-arrows-pointing-out-20-solid"
+          : "i-heroicons-arrows-pointing-in-20-solid",
+        style:
+          "margin-left: 10px; padding: 0px; vertical-align: middle; margin-top: -2px",
+      }),
+    ]);
+  } else {
+    return h("span", null, option.label);
+  }
+};
+
+type ColumnConfigTransfer = {
+  key: string;
+  label: string;
+};
+
+type Filter = {
+  id: string;
+  filter_expanded: boolean;
+};
+
+type UserView = {
+  filters: Filter[];
+  columns: string[];
+};
+
+const fetchUserView = () => {
+  $fetch("/api/v1/userview", {
+    method: "GET",
+    onResponse({ response }) {
+      uiData.selectedFilters = [];
+      uiData.selectedFiltersExpanded = {};
+      uiData.selectedColumns = [];
+      uiData.filterCCs = [];
+      types.value = {};
+
+      // give it a chance for the filters to refresh
+      setTimeout(() => {
+        var uv = <UserView>response._data;
+        for (const f of uv.filters) {
+          if (f.id in uiData.allCCsMap) {
+            uiData.selectedFilters.push(f.id);
+            uiData.selectedFiltersExpanded[f.id] = f.filter_expanded;
+
+            let cc = uiData.allCCsMap[f.id];
+            cc.filter_expanded = f.filter_expanded;
+            uiData.filterCCs.push(cc);
+            types.value[cc.key] = cc.type;
+          }
+        }
+
+        repos_table.columns = getDefaultColumns();
+        for (const id of uv.columns) {
+          if (id in uiData.allCCsMap) {
+            let cc = uiData.allCCsMap[id];
+            uiData.selectedColumns.push(id);
+
+            let c: Column<any> = {
+              title: cc.title,
+              key: cc.key,
+              dataKey: cc.key,
+              width: cc.width,
+              sortable: true,
+            };
+            if (cc.type != "string") {
+              c["align"] = "center";
+            }
+
+            const getContent = (rowData: any, cellData: any) => {
+              if (cc.type == "boolean") {
+                return h(Icon, {
+                  name: cellData ? "i-fa6-solid-check" : "i-fa6-solid-xmark",
+                  style: cellData ? "color: green" : "color: red",
+                });
+              } else if (cc.type == "array") {
+                return cellData && Array.isArray(cellData)
+                  ? cellData.map((cd: string) => {
+                      return h("div", {}, cd);
+                    })
+                  : "";
+              } else if (cc.type == "date") {
+                return cellData != "0001-01-01T00:00:00Z"
+                  ? h(
+                      "span",
+                      {
+                        title: useDayjs()(cellData).local().format(),
+                      },
+                      useDayjs()(cellData).fromNow()
+                    )
+                  : h("span", "");
+              } else if (cc.type == "reposcore") {
+                return h(
+                  "div",
+                  {
+                    style: {
+                      "padding-top": "5px",
+                      "background-color": rowData["score_color"],
+                      "border-radius": "50%",
+                      width: "31px",
+                      height: "31px",
+                    },
+                  },
+                  h("div", {}, cellData)
+                );
+              } else {
+                return h("span", cellData);
+              }
+            };
+            c["cellRenderer"] = ({ rowData, cellData }) =>
+              h(
+                "div",
+                {
+                  style: { padding: "5px 0" },
+                },
+                getContent(rowData, cellData)
+              );
+
+            if (cc.description) {
+              const d = cc.description;
+              const t = cc.title;
+              c["headerCellRenderer"] = () => {
+                return h(
+                  "div",
+                  {
+                    class: "el-table-v2__header-cell-text",
+                    title: d,
+                  },
+                  h("span", t)
+                );
+              };
+            }
+            repos_table.columns.push(c);
+          }
+        }
+      }, 0);
+    },
+  });
+};
+
+const filtersCheckedChange = (checked: any) => {
+  uiData.checkedFilters = checked;
+};
+
+const filtersChange = (v: any, direction: string) => {
+  if (direction == "left") {
+    uiData.checkedFilters = [];
+  }
+};
+
+const moveUpSelectedFilter = () => {
+  let element = uiData.checkedFilters[0];
+  let idx = uiData.selectedFilters.findIndex((e) => e === element);
+  if (idx > 0) {
+    let temp = uiData.selectedFilters[idx - 1];
+    uiData.selectedFilters[idx - 1] = uiData.selectedFilters[idx];
+    uiData.selectedFilters[idx] = temp;
+  }
+};
+
+const moveDownSelectedFilter = () => {
+  let element = uiData.checkedFilters[0];
+  let idx = uiData.selectedFilters.findIndex((e) => e === element);
+  if (idx >= 0 && idx < uiData.selectedFilters.length - 1) {
+    let temp = uiData.selectedFilters[idx + 1];
+    uiData.selectedFilters[idx + 1] = uiData.selectedFilters[idx];
+    uiData.selectedFilters[idx] = temp;
+  }
+};
+
+const columnsCheckedChange = (checked: any) => {
+  uiData.checkedColumns = checked;
+};
+
+const columnsChange = (v: any, direction: string) => {
+  if (direction == "left") {
+    uiData.checkedColumns = [];
+  }
+};
+
+const moveUpSelectedColumn = () => {
+  let element = uiData.checkedColumns[0];
+  let idx = uiData.selectedColumns.findIndex((e) => e === element);
+  if (idx > 0) {
+    let temp = uiData.selectedColumns[idx - 1];
+    uiData.selectedColumns[idx - 1] = uiData.selectedColumns[idx];
+    uiData.selectedColumns[idx] = temp;
+  }
+};
+
+const moveDownSelectedColumn = () => {
+  let element = uiData.checkedColumns[0];
+  let idx = uiData.selectedColumns.findIndex((e) => e === element);
+  if (idx >= 0 && idx < uiData.selectedColumns.length - 1) {
+    let temp = uiData.selectedColumns[idx + 1];
+    uiData.selectedColumns[idx + 1] = uiData.selectedColumns[idx];
+    uiData.selectedColumns[idx] = temp;
+  }
+};
+
 onMounted(() => {
   setupWebSocket();
-  fetchColumns();
+  fetchAllColumns();
 });
 </script>
 
@@ -602,6 +799,14 @@ onMounted(() => {
     <el-container>
       <el-aside width="330px">
         <div class="filter-buttons">
+          <el-button
+            @click="dialog = true"
+            circle
+            size="large"
+            class="filter-button"
+          >
+            <UIcon name="i-fa6-solid-gear" />
+          </el-button>
           <el-button
             @click="exportToCSV"
             circle
@@ -637,17 +842,10 @@ onMounted(() => {
             </template>
           </UDropdown>
         </div>
-        <Filter
-          type="number"
-          title="Repository Score"
-          field="score"
-          :filters="filters"
-          :negates="negates"
-          :filtersOrder="filtersOrder"
-          @updateFilters="updateFilters"
-          :disabled="loading"
-        />
-        <template v-if="filterCCs.length > 0" v-for="c in filterCCs">
+        <template
+          v-if="uiData.filterCCs.length > 0"
+          v-for="c in uiData.filterCCs"
+        >
           <Filter
             v-if="c.type != 'date'"
             :type="c.type"
@@ -702,6 +900,100 @@ onMounted(() => {
         </div>
       </el-main>
     </el-container>
+
+    <el-drawer
+      v-model="dialog"
+      title="Filter and Table Columns configuration"
+      :before-close="handleClose"
+      direction="ltr"
+      size="70%"
+    >
+      <div>
+        <el-transfer
+          v-model="uiData.selectedFilters"
+          style="
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 20px;
+          "
+          filterable
+          :render-content="renderFunc"
+          :titles="['Available Filters', 'Shown Filters']"
+          :format="{
+            noChecked: '${total}',
+            hasChecked: '${checked}/${total}',
+          }"
+          @right-check-change="filtersCheckedChange"
+          @change="filtersChange"
+          :data="uiData.availableFilters"
+          target-order="push"
+        >
+          <template #right-footer>
+            <el-button
+              v-if="uiData.checkedFilters.length == 1"
+              class="transfer-footer"
+              size="small"
+              @click="moveUpSelectedFilter"
+            >
+              <UIcon name="i-fa6-solid-arrow-up" />
+            </el-button>
+            <el-button
+              v-if="uiData.checkedFilters.length == 1"
+              class="transfer-footer"
+              size="small"
+              @click="moveDownSelectedFilter"
+            >
+              <UIcon name="i-fa6-solid-arrow-down" />
+            </el-button>
+          </template>
+        </el-transfer>
+
+        <el-transfer
+          v-model="uiData.selectedColumns"
+          style="
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 20px;
+          "
+          filterable
+          :titles="['Available Columns', 'Shown Columns']"
+          :format="{
+            noChecked: '${total}',
+            hasChecked: '${checked}/${total}',
+          }"
+          @right-check-change="columnsCheckedChange"
+          @change="columnsChange"
+          :data="uiData.availableColumns"
+          target-order="push"
+        >
+          <template #right-footer>
+            <el-button
+              v-if="uiData.checkedColumns.length == 1"
+              class="transfer-footer"
+              size="small"
+              @click="moveUpSelectedColumn"
+            >
+              <UIcon name="i-fa6-solid-arrow-up" />
+            </el-button>
+            <el-button
+              v-if="uiData.checkedColumns.length == 1"
+              class="transfer-footer"
+              size="small"
+              @click="moveDownSelectedColumn"
+            >
+              <UIcon name="i-fa6-solid-arrow-down" />
+            </el-button>
+          </template>
+        </el-transfer>
+
+        <div class="actions-button">
+          <el-button @click="dialog = false">Cancel</el-button>
+          <el-button type="primary" @click="onSubmit">Submit</el-button>
+        </div>
+      </div>
+    </el-drawer>
   </div>
 </template>
 
@@ -723,6 +1015,7 @@ onMounted(() => {
 .filter-button {
   margin-bottom: 9px;
   margin-right: 8px;
+  margin-left: 0px;
 }
 
 .filter-buttons {

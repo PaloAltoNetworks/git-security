@@ -13,3 +13,15 @@
 .zebra {
     background-color: var(--el-color-info-light-9) !important;
 }
+
+.el-transfer-panel {
+  width: 350px !important;
+}
+
+.el-transfer-panel__body {
+  max-height: 40% !important;
+}
+
+.el-transfer-panel__footer {
+  text-align: center;
+}

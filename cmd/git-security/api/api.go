@@ -50,6 +50,8 @@ var newPolicies = [][]string{
 	{"user", "/api/v1/repos", "POST"},
 	{"user", "/api/v1/repos/*", "POST"},
 	{"user", "/api/v1/columns", "GET"},
+	{"user", "/api/v1/userview", "GET"},
+	{"user", "/api/v1/userview", "PUT"},
 	{"user", "/ws", "GET"},
 	{"owneradmin", "/api/v1/repos/action/repo-owner", "POST"},
 	{"owneradmin", "/api/v1/repos/action/delete-owner/*", "DELETE"},
@@ -131,11 +133,11 @@ func NewFiberApp(
 
 		app.Use(func(c *fiber.Ctx) error {
 			sess, err := store.Get(c)
-			if err != nil || sess.Get("email") == nil || cast.ToString(sess.Get("email")) == "" {
+			if err != nil || sess.Get("username") == nil || cast.ToString(sess.Get("username")) == "" {
 				return c.SendStatus(fiber.StatusForbidden)
 			}
 			r, err := a.enforcer.Enforce(
-				cast.ToString(sess.Get("email")),
+				cast.ToString(sess.Get("username")),
 				string(c.Request().URI().Path()),
 				string(c.Request().Header.Method()),
 			)
@@ -160,6 +162,15 @@ func NewFiberApp(
 		app.Use(basicauth.New(basicauth.Config{
 			Users: users,
 		}))
+		app.Use(func(c *fiber.Ctx) error {
+			sess, err := store.Get(c)
+			if err != nil {
+				return c.SendStatus(fiber.StatusForbidden)
+			}
+			sess.Set("username", c.Locals("username"))
+			sess.Save()
+			return c.Next()
+		})
 
 		app.Static("/", filesDir)
 	}
@@ -192,6 +203,7 @@ func NewFiberApp(
 	v1.Get("/globalsettings", a.GetGlobalSettings)
 	v1.Get("/roles", a.GetRoles)
 	v1.Get("/users", a.GetUsers)
+	v1.Get("/userview", a.GetUserView)
 	v1.Post("/columns", a.CreateColumn)
 	v1.Post("/customs", a.CreateCustom)
 	v1.Post("/columns/order", a.ChangeColumnsOrder)
@@ -210,6 +222,7 @@ func NewFiberApp(
 	v1.Put("/custom/:id", a.UpdateCustom)
 	v1.Put("/globalsettings", a.UpdateGlobalSettings)
 	v1.Put("/user/:name", a.UpdateUserRoles)
+	v1.Put("/userview", a.UpdateUserView)
 
 	return app
 }

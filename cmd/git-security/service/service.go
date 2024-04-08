@@ -378,6 +378,15 @@ func (app *GitSecurityApp) createDefaultColumns() error {
 			Show:        true,
 			Filter:      true,
 		},
+		{
+			Type:        "reposcore",
+			Title:       "Score",
+			Description: "",
+			Key:         "score",
+			Width:       70,
+			Show:        false,
+			Filter:      false,
+		},
 	}
 
 	var col config.Column
