@@ -277,14 +277,20 @@ func (a *api) AddBranchProtectionRule(c *fiber.Ctx) error {
 	return c.SendStatus(200)
 }
 
-func (a *api) updateBranchProtectionRule(c *fiber.Ctx, updateField string, updateValue interface{}) error {
+func (a *api) updateBranchProtectionRule(c *fiber.Ctx, updateField string) error {
 	b := struct {
-		IDs []string `json:"ids"`
+		IDs         []string    `json:"ids"`
+		UpdateValue interface{} `json:"updateValue"`
 	}{}
 	if err := c.BodyParser(&b); err != nil {
 		return err
 	}
 
+	switch v := b.UpdateValue.(type) {
+	case float64:
+		// If it's a float64 (which it will be if it's a number), convert to int
+		b.UpdateValue = int(v)
+	}
 	cursor, err := a.db.Collection("repositories").Find(a.ctx, bson.D{
 		bson.E{
 			Key:   "id",
@@ -305,7 +311,7 @@ func (a *api) updateBranchProtectionRule(c *fiber.Ctx, updateField string, updat
 			if err := a.g.UpdateBranchProtectionRule(
 				repo.DefaultBranchRef.BranchProtectionRule.ID,
 				updateField,
-				updateValue,
+				b.UpdateValue,
 			); err != nil {
 				slog.Error(
 					"error in CreateBranchProtectionRule",
@@ -335,31 +341,39 @@ func (a *api) updateBranchProtectionRule(c *fiber.Ctx, updateField string, updat
 }
 
 func (a *api) RequiresPR(c *fiber.Ctx) error {
-	return a.updateBranchProtectionRule(c, "RequiresApprovingReviews", true)
+	return a.updateBranchProtectionRule(c, "RequiresApprovingReviews")
 }
 
 func (a *api) RequiredApprovingReviewCount(c *fiber.Ctx) error {
-	return a.updateBranchProtectionRule(c, "RequiredApprovingReviewCount", 2)
+	return a.updateBranchProtectionRule(c, "RequiredApprovingReviewCount")
 }
 
 func (a *api) DismissesStaleReviews(c *fiber.Ctx) error {
-	return a.updateBranchProtectionRule(c, "DismissesStaleReviews", true)
+	return a.updateBranchProtectionRule(c, "DismissesStaleReviews")
+}
+
+func (a *api) RequiresCodeOwnerReviews(c *fiber.Ctx) error {
+	return a.updateBranchProtectionRule(c, "RequiresCodeOwnerReviews")
 }
 
 func (a *api) RequiresConversationResolution(c *fiber.Ctx) error {
-	return a.updateBranchProtectionRule(c, "RequiresConversationResolution", true)
+	return a.updateBranchProtectionRule(c, "RequiresConversationResolution")
 }
 
-func (a *api) AllowsForcePushes(c *fiber.Ctx) error {
-	return a.updateBranchProtectionRule(c, "AllowsForcePushes", false)
-}
-
-func (a *api) AllowsDeletions(c *fiber.Ctx) error {
-	return a.updateBranchProtectionRule(c, "AllowsDeletions", false)
+func (a *api) RequiresCommitSignatures(c *fiber.Ctx) error {
+	return a.updateBranchProtectionRule(c, "RequiresCommitSignatures")
 }
 
 func (a *api) IsAdminEnforced(c *fiber.Ctx) error {
-	return a.updateBranchProtectionRule(c, "IsAdminEnforced", true)
+	return a.updateBranchProtectionRule(c, "IsAdminEnforced")
+}
+
+func (a *api) AllowsForcePushes(c *fiber.Ctx) error {
+	return a.updateBranchProtectionRule(c, "AllowsForcePushes")
+}
+
+func (a *api) AllowsDeletions(c *fiber.Ctx) error {
+	return a.updateBranchProtectionRule(c, "AllowsDeletions")
 }
 
 func (a *api) updateRepository(repo *gh.Repository) error {

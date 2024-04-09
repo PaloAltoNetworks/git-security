@@ -16,7 +16,11 @@ import type {
 import { Loading as LoadingIcon } from "@element-plus/icons-vue";
 import Icon from "#ui/components/elements/Icon.vue";
 import UButton from "#ui/components/elements/Button.vue";
-import { showConfirmationDialog, showNotification } from "@/common-functions";
+import {
+  showConfirmationDialog,
+  showNotification,
+  actionsConfirmationDialog,
+} from "@/common-functions";
 
 type ColumnType = "string" | "number" | "boolean" | "array" | "date";
 type ColumnConfig = {
@@ -408,14 +412,20 @@ const repos_table = reactive({
 
 const actionAPI = async (api: string, actionLabel: string) => {
   try {
-    const confirmed = await showConfirmationDialog(
-      `Are you sure you want to perform the action:\n ${actionLabel} ?`
-    );
-    if (confirmed) {
+    let confirmed;
+    if (actionLabel == "Add Default Branch Protection Rule") {
+      confirmed = await showConfirmationDialog(
+        `Are you sure you want to perform the action:\n ${actionLabel} ?`
+      );
+    } else {
+      confirmed = await actionsConfirmationDialog(`${actionLabel}`);
+    }
+    if (confirmed != undefined) {
       $fetch(api, {
         method: "POST",
         body: {
           ids: Array.from(repos_table.selected.keys()),
+          updateValue: confirmed,
         },
         onResponse: ({ response }) => {
           if (response.status == 200) {
@@ -444,13 +454,70 @@ const actions = [
   ],
   [
     {
-      label: "Requires PR: enabled",
+      label: "Requires PR",
       click: () => actionAPI("/api/v1/repos/action/requires-pr", "Requires PR"),
     },
   ],
   [
     {
-      label: "Requires Approving Review Count: 2",
+      label: "How many Approvers?",
+      click: () => {
+        const options = Array.from({ length: 7 }, (_, i) => ({
+          value: i.toString(),
+          label: i.toString(),
+        }));
+
+        const selectElement = document.createElement("select");
+        selectElement.id = "approversSelect"; // Add an id to the select element
+        options.forEach((option) => {
+          const optionElement = document.createElement("option");
+          optionElement.value = option.value;
+          optionElement.text = option.label;
+          selectElement.appendChild(optionElement);
+        });
+
+        const message = `
+          <div>
+            Choose Number of Approvers : ${selectElement.outerHTML}
+          </div>
+        `;
+        ElMessageBox.alert(message, "Number of Approvers", {
+          dangerouslyUseHTMLString: true,
+          confirmButtonText: "Submit",
+          cancelButtonText: "Cancel",
+          callback: (action, instance) => {
+            if (action == "confirm") {
+              const selectElementInMessageBox =
+                document.getElementById("approversSelect"); // Get the select element from the MessageBox
+              let value = selectElementInMessageBox
+                ? (selectElementInMessageBox as HTMLSelectElement).value
+                : "";
+              if (value) {
+                let count = Number(value);
+                $fetch("/api/v1/repos/action/required-approving-review-count", {
+                  method: "POST",
+                  body: {
+                    ids: Array.from(repos_table.selected.keys()),
+                    updateValue: count,
+                  },
+                  onResponse: ({ response }) => {
+                    if (response.status == 200) {
+                      showNotification("success");
+                    } else {
+                      showNotification("error");
+                    }
+                  },
+                });
+              }
+            }
+          },
+        });
+      },
+    },
+  ],
+  [
+    {
+      label: "Requires Approving Review Count",
       click: () =>
         actionAPI(
           "/api/v1/repos/action/required-approving-review-count",
@@ -460,7 +527,7 @@ const actions = [
   ],
   [
     {
-      label: "Dismiss Stale Review: enabled",
+      label: "Dismiss Stale Reviews",
       click: () =>
         actionAPI(
           "/api/v1/repos/action/dismisses-stale-reviews",
@@ -470,7 +537,17 @@ const actions = [
   ],
   [
     {
-      label: "Requires Conversation Resolution: enabled",
+      label: "Requires Code Owner Reviews",
+      click: () =>
+        actionAPI(
+          "/api/v1/repos/action/requires-code-owner-reviews",
+          "Requires Code Owner Reviews"
+        ),
+    },
+  ],
+  [
+    {
+      label: "Requires Conversation Resolution",
       click: () =>
         actionAPI(
           "/api/v1/repos/action/requires-conversation-resolution",
@@ -480,7 +557,24 @@ const actions = [
   ],
   [
     {
-      label: "Allow Force Pushes: disabled",
+      label: "Requires Commit Signatures",
+      click: () =>
+        actionAPI(
+          "/api/v1/repos/action/requires-commit-signatures",
+          "Requires Commit Signatures"
+        ),
+    },
+  ],
+  [
+    {
+      label: "Admin Enforced",
+      click: () =>
+        actionAPI("/api/v1/repos/action/admin-enforced", "Admin Enforced"),
+    },
+  ],
+  [
+    {
+      label: "Allow Force Pushes",
       click: () =>
         actionAPI(
           "/api/v1/repos/action/allows-force-pushes",
@@ -490,16 +584,9 @@ const actions = [
   ],
   [
     {
-      label: "Allow Deletions: disabled",
+      label: "Allow Deletions",
       click: () =>
         actionAPI("/api/v1/repos/action/allows-deletions", "Allow Deletions"),
-    },
-  ],
-  [
-    {
-      label: "Admin Enforced: enabled",
-      click: () =>
-        actionAPI("/api/v1/repos/action/admin-enforced", "Admin Enforced"),
     },
   ],
   [
@@ -633,7 +720,7 @@ onMounted(() => {
               trailing-icon="i-heroicons-chevron-down-20-solid"
             />
             <template #item="{ item }">
-              <span>{{ item.label }}</span>
+              <span class="actions">{{ item.label }}</span>
             </template>
           </UDropdown>
         </div>
@@ -732,5 +819,9 @@ onMounted(() => {
 .actions-button {
   float: right;
   margin-top: 4px;
+}
+
+.actions {
+  text-align: left;
 }
 </style>

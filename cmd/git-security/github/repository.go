@@ -215,9 +215,21 @@ func (ghi *GitHubImpl) UpdateBranchProtectionRule(branchProtectionRuleID, field 
 		if v, ok := value.(bool); ok {
 			input.DismissesStaleReviews = githubv4.NewBoolean(githubv4.Boolean(v))
 		}
+	case "RequiresCodeOwnerReviews":
+		if v, ok := value.(bool); ok {
+			input.RequiresCodeOwnerReviews = githubv4.NewBoolean(githubv4.Boolean(v))
+		}
 	case "RequiresConversationResolution":
 		if v, ok := value.(bool); ok {
 			input.RequiresConversationResolution = githubv4.NewBoolean(githubv4.Boolean(v))
+		}
+	case "RequiresCommitSignatures":
+		if v, ok := value.(bool); ok {
+			input.RequiresCommitSignatures = githubv4.NewBoolean(githubv4.Boolean(v))
+		}
+	case "IsAdminEnforced":
+		if v, ok := value.(bool); ok {
+			input.IsAdminEnforced = githubv4.NewBoolean(githubv4.Boolean(v))
 		}
 	case "AllowsForcePushes":
 		if v, ok := value.(bool); ok {
@@ -226,10 +238,6 @@ func (ghi *GitHubImpl) UpdateBranchProtectionRule(branchProtectionRuleID, field 
 	case "AllowsDeletions":
 		if v, ok := value.(bool); ok {
 			input.AllowsDeletions = githubv4.NewBoolean(githubv4.Boolean(v))
-		}
-	case "IsAdminEnforced":
-		if v, ok := value.(bool); ok {
-			input.IsAdminEnforced = githubv4.NewBoolean(githubv4.Boolean(v))
 		}
 	}
 
