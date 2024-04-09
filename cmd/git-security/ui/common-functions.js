@@ -6,6 +6,25 @@ export const showConfirmationDialog = (message) => {
     })
 }
 
+export const actionsConfirmationDialog = async (message) => {
+    try {
+    await ElMessageBox({
+      message: message,
+      showCancelButton: true,
+      showConfirmButton: true,
+      distinguishCancelAndClose: true,
+      confirmButtonText: 'Enable',
+      cancelButtonText: 'Disable',
+      type: 'warning',
+    });
+    return true;
+  } catch (action) {
+    if (action == 'cancel') {
+      return false; // Return false when Disable is clicked
+    }
+  }
+}
+
 export const showNotification = (status) => {
   if (status == "success") {
     ElNotification({

@@ -215,6 +215,8 @@ func NewFiberApp(
 	v1.Post("/repos/action/allows-force-pushes", a.AllowsForcePushes)
 	v1.Post("/repos/action/dismisses-stale-reviews", a.DismissesStaleReviews)
 	v1.Post("/repos/action/required-approving-review-count", a.RequiredApprovingReviewCount)
+	v1.Post("/repos/action/requires-code-owner-reviews", a.RequiresCodeOwnerReviews)
+	v1.Post("/repos/action/requires-commit-signatures", a.RequiresCommitSignatures)
 	v1.Post("/repos/action/requires-conversation-resolution", a.RequiresConversationResolution)
 	v1.Post("/repos/action/repo-owner", a.AddRepoOwner)
 	v1.Post("/repos/action/requires-pr", a.RequiresPR)
