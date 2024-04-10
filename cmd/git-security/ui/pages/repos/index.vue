@@ -3,6 +3,7 @@ import {
   ElCheckbox,
   ElInput,
   ElLink,
+  ElTooltip,
   TableV2FixedDir,
   TableV2SortOrder,
 } from "element-plus";
@@ -292,33 +293,6 @@ const fetchAllColumns = () => {
 
       uiData.availableFilters.sort((a, b) => a.label.localeCompare(b.label));
       uiData.availableColumns.sort((a, b) => a.label.localeCompare(b.label));
-
-      // workaround: https://github.com/element-plus/element-plus/issues/13968
-      const tableLeft = document.querySelector(
-        "div.el-table-v2__table.el-table-v2__left > div.el-vl__wrapper.el-table-v2__body > div:nth-child(1)"
-      )! as HTMLElement;
-
-      const tableMain = document.querySelector(
-        "div.el-table-v2__table.el-table-v2__main > div.el-vl__wrapper.el-table-v2__body > div:nth-child(1)"
-      )! as HTMLElement;
-
-      const observer = new MutationObserver(async () => {
-        observer.disconnect();
-
-        const tableMainHeight = Number.parseInt(tableMain.style.height);
-        if (Number.parseInt(tableLeft.style.height) != tableMainHeight) {
-          tableLeft?.style!.setProperty("height", "auto");
-        }
-
-        observer.observe(tableLeft, {
-          attributes: true,
-          attributeFilter: ["style"],
-        });
-      });
-      observer.observe(tableLeft, {
-        attributes: true,
-        attributeFilter: ["style"],
-      });
 
       fetchUserView();
       fetchRepos();
@@ -740,7 +714,7 @@ const fetchUserView = () => {
               width: cc.width,
               sortable: true,
             };
-            if (cc.type != "string") {
+            if (cc.type != "string" && cc.type != "array") {
               c["align"] = "center";
             }
 
@@ -752,9 +726,26 @@ const fetchUserView = () => {
                 });
               } else if (cc.type == "array") {
                 return cellData && Array.isArray(cellData)
-                  ? cellData.map((cd: string) => {
-                      return h("div", {}, cd);
-                    })
+                  ? h(
+                      ElTooltip,
+                      {
+                        content: cellData.join(", "),
+                        placement: "right",
+                        "show-after": 500,
+                      },
+                      h(
+                        "div",
+                        {
+                          style: {
+                            "white-space": "nowrap",
+                            overflow: "hidden",
+                            "text-overflow": "ellipsis",
+                            width: cc.width - 25 + "px",
+                          },
+                        },
+                        cellData.join(", ")
+                      )
+                    )
                   : "";
               } else if (cc.type == "date") {
                 return cellData != "0001-01-01T00:00:00Z"
@@ -958,7 +949,6 @@ onMounted(() => {
                 :width="width"
                 :height="height"
                 fixed
-                :estimated-row-height="43"
                 :sort-by="repos_table.sortState"
                 @column-sort="repos_table.onSort"
                 :row-class="repos_table.rowClass"
