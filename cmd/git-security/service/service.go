@@ -23,6 +23,11 @@ import (
 	gh "github.com/PaloAltoNetworks/git-security/cmd/git-security/github"
 )
 
+const (
+	deleteOldDataInterval = 24 * time.Hour
+	oldRepos              = -7
+)
+
 type Opts struct {
 	GitHub         *flag.GitHubOpts
 	Http           *flag.HttpOpts
@@ -200,6 +205,27 @@ func (app *GitSecurityApp) Run() (interruptible.Stop, error) {
 				break loop
 			case <-time.After(5 * time.Minute):
 				if err := app.runCustom(); err != nil {
+					slog.Error("error in app.runCustom()", slog.String("error", err.Error()))
+				}
+			}
+		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		if err := app.deleteOldRepos(oldRepos); err != nil {
+			slog.Error("error in app.runCustom()", slog.String("error", err.Error()))
+		}
+
+	loop:
+		for {
+			select {
+			case <-app.ctx.Done():
+				break loop
+			case <-time.After(deleteOldDataInterval):
+				if err := app.deleteOldRepos(oldRepos); err != nil {
 					slog.Error("error in app.runCustom()", slog.String("error", err.Error()))
 				}
 			}
@@ -469,6 +495,22 @@ func (app *GitSecurityApp) fetch() error {
 				return err
 			}
 		}
+	}
+
+	return nil
+}
+
+func (app *GitSecurityApp) deleteOldRepos(oldRepos int) error {
+
+	t := time.Now().AddDate(0, 0, oldRepos)
+
+	// Create a filter that matches documents where FetchedAt is older than t
+	filter := bson.D{{Key: "fetched_at", Value: bson.D{{Key: "$lt", Value: t}}}}
+
+	// Delete the documents from the repositories collection
+	_, err := app.db.Collection("repositories").DeleteMany(app.ctx, filter)
+	if err != nil {
+		return err
 	}
 
 	return nil
