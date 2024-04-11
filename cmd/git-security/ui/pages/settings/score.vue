@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { showConfirmationDialog } from "@/common-functions";
+import { columnDataKeys } from "@/utils/common-functions";
 
 type GlobalSettings = {
   score_colors: Array<ScoreColor>;
@@ -204,14 +205,20 @@ onMounted(() => {
         @change="globalSettingsChanged()"
       />
 
-      <el-input
+      <el-autocomplete
         v-model="sw.field"
-        class="w-40 m-2"
+        :fetch-suggestions="columnDataKeys"
+        class="m-2"
         size="large"
         @change="globalSettingsChanged()"
+        :style="{ width: '40%' }"
       >
         <template #prepend>Field</template>
-      </el-input>
+
+        <template #default="{ item }">
+          <div>{{ item.displayValue }}</div>
+        </template>
+      </el-autocomplete>
 
       <el-select
         v-model="sw.comparator"
