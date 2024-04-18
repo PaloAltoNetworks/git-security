@@ -381,6 +381,14 @@ func (a *api) RequiresCodeOwnerReviews(c *fiber.Ctx) error {
 	return a.updateBranchProtectionRule(c, "RequiresCodeOwnerReviews")
 }
 
+func (a *api) RequiresStatusChecks(c *fiber.Ctx) error {
+	return a.updateBranchProtectionRule(c, "RequiresStatusChecks")
+}
+
+func (a *api) RequiresStrictStatusChecks(c *fiber.Ctx) error {
+	return a.updateBranchProtectionRule(c, "RequiresStrictStatusChecks")
+}
+
 func (a *api) RequiresConversationResolution(c *fiber.Ctx) error {
 	return a.updateBranchProtectionRule(c, "RequiresConversationResolution")
 }

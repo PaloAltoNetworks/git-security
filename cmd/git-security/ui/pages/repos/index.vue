@@ -473,6 +473,26 @@ const actions = [
   ],
   [
     {
+      label: "Requires Status Checks",
+      click: () =>
+        actionAPI(
+          "/api/v1/repos/action/requires-status-checks",
+          "Requires Status Checks"
+        ),
+    },
+  ],
+  [
+    {
+      label: "Requires Strict Status Checks",
+      click: () =>
+        actionAPI(
+          "/api/v1/repos/action/requires-strict-status-checks",
+          "Requires Strict Status Checks"
+        ),
+    },
+  ],
+  [
+    {
       label: "Requires Conversation Resolution",
       click: () =>
         actionAPI(

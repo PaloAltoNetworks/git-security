@@ -219,6 +219,15 @@ func (ghi *GitHubImpl) UpdateBranchProtectionRule(branchProtectionRuleID, field 
 		if v, ok := value.(bool); ok {
 			input.RequiresCodeOwnerReviews = githubv4.NewBoolean(githubv4.Boolean(v))
 		}
+	case "RequiresStatusChecks":
+		if v, ok := value.(bool); ok {
+			input.RequiresStatusChecks = githubv4.NewBoolean(githubv4.Boolean(v))
+		}
+
+	case "RequiresStrictStatusChecks":
+		if v, ok := value.(bool); ok {
+			input.RequiresStrictStatusChecks = githubv4.NewBoolean(githubv4.Boolean(v))
+		}
 	case "RequiresConversationResolution":
 		if v, ok := value.(bool); ok {
 			input.RequiresConversationResolution = githubv4.NewBoolean(githubv4.Boolean(v))
