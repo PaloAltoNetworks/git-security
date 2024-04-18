@@ -218,6 +218,8 @@ func NewFiberApp(
 	v1.Post("/repos/action/requires-code-owner-reviews", a.RequiresCodeOwnerReviews)
 	v1.Post("/repos/action/requires-commit-signatures", a.RequiresCommitSignatures)
 	v1.Post("/repos/action/requires-conversation-resolution", a.RequiresConversationResolution)
+	v1.Post("/repos/action/requires-status-checks", a.RequiresStatusChecks)
+	v1.Post("/repos/action/requires-strict-status-checks", a.RequiresStrictStatusChecks)
 	v1.Post("/repos/action/repo-owner", a.AddRepoOwner)
 	v1.Post("/repos/action/requires-pr", a.RequiresPR)
 	v1.Put("/column/:id", a.UpdateColumn)
