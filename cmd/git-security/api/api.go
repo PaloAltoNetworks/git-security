@@ -213,6 +213,7 @@ func NewFiberApp(
 	v1.Post("/repos/action/admin-enforced", a.IsAdminEnforced)
 	v1.Post("/repos/action/allows-deletions", a.AllowsDeletions)
 	v1.Post("/repos/action/allows-force-pushes", a.AllowsForcePushes)
+	v1.Post("/repos/action/archive-repo", a.ArchiveRepo)
 	v1.Post("/repos/action/dismisses-stale-reviews", a.DismissesStaleReviews)
 	v1.Post("/repos/action/required-approving-review-count", a.RequiredApprovingReviewCount)
 	v1.Post("/repos/action/requires-code-owner-reviews", a.RequiresCodeOwnerReviews)

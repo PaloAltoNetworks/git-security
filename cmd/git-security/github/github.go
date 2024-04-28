@@ -16,6 +16,7 @@ import (
 )
 
 type GitHub interface {
+	ArchiveRepository(repoID string, archive bool) error
 	CreateBranchProtectionRule(repoID, pattern string) error
 	GetOrganizations() ([]*Organization, error)
 	GetRepos(orgName string) ([]*Repository, error)

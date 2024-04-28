@@ -413,6 +413,15 @@ func (app *GitSecurityApp) createDefaultColumns() error {
 			Show:        false,
 			Filter:      false,
 		},
+		{
+			Type:        "boolean",
+			Title:       "Archived?",
+			Description: "",
+			Key:         "is_archived",
+			Width:       150,
+			Show:        false,
+			Filter:      false,
+		},
 	}
 
 	var col config.Column

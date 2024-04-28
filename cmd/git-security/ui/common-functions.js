@@ -6,15 +6,15 @@ export const showConfirmationDialog = (message) => {
     })
 }
 
-export const actionsConfirmationDialog = async (message) => {
-    try {
+export const actionsConfirmationDialog = async (message, confirmLabel, cancelLabel) => {
+  try {
     await ElMessageBox({
       message: message,
       showCancelButton: true,
       showConfirmButton: true,
       distinguishCancelAndClose: true,
-      confirmButtonText: 'Enable',
-      cancelButtonText: 'Disable',
+      confirmButtonText: confirmLabel == undefined ? "Enable" : confirmLabel,
+      cancelButtonText: cancelLabel == undefined ? "Disable" : cancelLabel,
       type: 'warning',
     });
     return true;

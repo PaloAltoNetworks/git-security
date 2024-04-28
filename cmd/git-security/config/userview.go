@@ -8,8 +8,9 @@ type UserViewFilter struct {
 }
 
 type UserView struct {
-	ID       primitive.ObjectID   `bson:"_id,omitempty" json:"id,omitempty"`
-	Username string               `bson:"username" json:"username"`
-	Filters  []UserViewFilter     `bson:"filters" json:"filters"`
-	Columns  []primitive.ObjectID `bson:"columns" json:"columns"`
+	ID           primitive.ObjectID   `bson:"_id,omitempty" json:"id,omitempty"`
+	Username     string               `bson:"username" json:"username"`
+	ShowArchived bool                 `bson:"show_archived" json:"show_archived"`
+	Filters      []UserViewFilter     `bson:"filters" json:"filters"`
+	Columns      []primitive.ObjectID `bson:"columns" json:"columns"`
 }

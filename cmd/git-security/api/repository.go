@@ -35,7 +35,8 @@ type NameCount struct {
 
 func (a *api) GetRepositories(c *fiber.Ctx) error {
 	q := struct {
-		CSV bool `query:"csv"`
+		CSV      bool `query:"csv"`
+		Archived bool `query:"archived"`
 	}{}
 	if err := c.QueryParser(&q); err != nil {
 		return err
@@ -48,11 +49,9 @@ func (a *api) GetRepositories(c *fiber.Ctx) error {
 		return err
 	}
 
-	filters := bson.D{
-		{
-			Key:   "is_archived",
-			Value: false,
-		},
+	filters := bson.D{}
+	if !q.Archived {
+		filters = append(filters, bson.E{Key: "is_archived", Value: false})
 	}
 	for _, filter := range b.Filters {
 		if filter.Type == "array" {
@@ -155,6 +154,13 @@ func (a *api) GetRepositories(c *fiber.Ctx) error {
 }
 
 func (a *api) GetRepositoriesGroupBy(c *fiber.Ctx) error {
+	q := struct {
+		Archived bool `query:"archived"`
+	}{}
+	if err := c.QueryParser(&q); err != nil {
+		return err
+	}
+
 	groupBy := c.Params("groupBy")
 	if groupBy == "" {
 		return c.SendStatus(fiber.StatusBadRequest)
@@ -168,11 +174,9 @@ func (a *api) GetRepositoriesGroupBy(c *fiber.Ctx) error {
 		return err
 	}
 
-	filters := bson.D{
-		{
-			Key:   "is_archived",
-			Value: false,
-		},
+	filters := bson.D{}
+	if !q.Archived {
+		filters = append(filters, bson.E{Key: "is_archived", Value: false})
 	}
 	for _, filter := range b.Filters {
 		if filter.Type == "array" {
@@ -536,5 +540,54 @@ func (a *api) DeleteRepoOwner(c *fiber.Ctx) error {
 		return err
 	}
 
+	return c.SendStatus(200)
+}
+
+func (a *api) ArchiveRepo(c *fiber.Ctx) error {
+	b := struct {
+		IDs         []string    `json:"ids"`
+		UpdateValue interface{} `json:"updateValue"`
+	}{}
+	if err := c.BodyParser(&b); err != nil {
+		return err
+	}
+
+	cursor, err := a.db.Collection("repositories").Find(a.ctx, bson.D{
+		bson.E{
+			Key:   "id",
+			Value: bson.M{"$in": b.IDs},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	hasError := false
+	for cursor.Next(a.ctx) {
+		var repo gh.Repository
+		if err := cursor.Decode(&repo); err != nil {
+			return err
+		}
+		if a.g.ArchiveRepository(repo.ID, cast.ToBool(b.UpdateValue)); err != nil {
+			slog.Error(
+				"error in ArchiveRepository",
+				slog.String("error", err.Error()),
+				slog.String("repo", repo.Name),
+			)
+			hasError = true
+			continue
+		}
+		if err := a.updateRepository(&repo); err != nil {
+			hasError = true
+			continue
+		}
+	}
+	if err := cursor.Err(); err != nil {
+		return err
+	}
+	defer cursor.Close(a.ctx)
+
+	if hasError {
+		return errors.New("encountered error in ArchiveRepo")
+	}
 	return c.SendStatus(200)
 }

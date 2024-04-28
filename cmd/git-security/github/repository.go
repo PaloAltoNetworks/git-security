@@ -347,3 +347,34 @@ func (repo *Repository) UpdateRepoScoreAndColor(gs *config.GlobalSettings) error
 	}
 	return nil
 }
+
+func (ghi *GitHubImpl) ArchiveRepository(repoID string, archive bool) error {
+	var a struct {
+		ArchiveRepository struct {
+			Repository struct {
+				Name string
+			}
+		} `graphql:"archiveRepository(input: $input)"`
+	}
+	ainput := githubv4.ArchiveRepositoryInput{
+		RepositoryID: repoID,
+	}
+
+	var u struct {
+		UnarchiveRepository struct {
+			Repository struct {
+				Name string
+			}
+		} `graphql:"unarchiveRepository(input: $input)"`
+	}
+	uinput := githubv4.UnarchiveRepositoryInput{
+		RepositoryID: repoID,
+	}
+
+	if archive {
+		slog.Info("archiving repo", slog.String("repoID", repoID))
+		return ghi.gqlClient.Mutate(ghi.ctx, &a, ainput, nil)
+	}
+	slog.Info("unarchiving repo", slog.String("repoID", repoID))
+	return ghi.gqlClient.Mutate(ghi.ctx, &u, uinput, nil)
+}

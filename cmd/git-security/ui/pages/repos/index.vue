@@ -76,7 +76,7 @@ const transform = (f: Record<string, string[]>) => {
 
 const fetchRepos = () => {
   loading.value = true;
-  $fetch("/api/v1/repos", {
+  $fetch("/api/v1/repos?archived=" + (uiData.showArchived ? "true" : "false"), {
     method: "POST",
     body: {
       filters: transform(filters.value),
@@ -103,20 +103,24 @@ const refreshFilter = async () => {
 };
 
 const exportToCSV = async () => {
-  $fetch("/api/v1/repos?csv=true", {
-    method: "POST",
-    body: {
-      filters: transform(filters.value),
-    },
-    onResponse({ response }) {
-      const url =
-        "data:text/csv;charset=utf-8," + encodeURIComponent(response._data);
-      const a = document.createElement("a");
-      a.href = url;
-      a.setAttribute("download", "repos.csv");
-      a.click();
-    },
-  });
+  $fetch(
+    "/api/v1/repos?csv=true&archived=" +
+      (uiData.showArchived ? "true" : "false"),
+    {
+      method: "POST",
+      body: {
+        filters: transform(filters.value),
+      },
+      onResponse({ response }) {
+        const url =
+          "data:text/csv;charset=utf-8," + encodeURIComponent(response._data);
+        const a = document.createElement("a");
+        a.href = url;
+        a.setAttribute("download", "repos.csv");
+        a.click();
+      },
+    }
+  );
 };
 
 const getDefaultColumns = (): Column<any>[] => [
@@ -267,6 +271,7 @@ const uiData = reactive({
   checkedColumns: <string[]>[],
   selectedColumns: <string[]>[],
   selectedFiltersExpanded: <Record<string, boolean>>{},
+  showArchived: false,
 });
 
 const fetchAllColumns = () => {
@@ -295,7 +300,6 @@ const fetchAllColumns = () => {
       uiData.availableColumns.sort((a, b) => a.label.localeCompare(b.label));
 
       fetchUserView();
-      fetchRepos();
     },
   });
 };
@@ -336,7 +340,12 @@ const repos_table = reactive({
   },
 });
 
-const actionAPI = async (api: string, actionLabel: string) => {
+const actionAPI = async (
+  api: string,
+  actionLabel: string,
+  confirmLabel?: string,
+  cancelLabel?: string
+) => {
   try {
     let confirmed;
     if (actionLabel == "Add Default Branch Protection Rule") {
@@ -344,7 +353,11 @@ const actionAPI = async (api: string, actionLabel: string) => {
         `Are you sure you want to perform the action:\n ${actionLabel} ?`
       );
     } else {
-      confirmed = await actionsConfirmationDialog(`${actionLabel}`);
+      confirmed = await actionsConfirmationDialog(
+        `${actionLabel}`,
+        confirmLabel,
+        cancelLabel
+      );
     }
     if (confirmed != undefined) {
       $fetch(api, {
@@ -537,7 +550,19 @@ const actions = [
   ],
   [
     {
-      label: " Update Owner ",
+      label: "Archive/Unarchive Repos",
+      click: () =>
+        actionAPI(
+          "/api/v1/repos/action/archive-repo",
+          "Archive/Unarchive Repos",
+          "Archive",
+          "Unarchive"
+        ),
+    },
+  ],
+  [
+    {
+      label: "Update Owner",
       click: () => {
         try {
           ElMessageBox.prompt("Please enter the owner name", "Add Owner", {
@@ -571,7 +596,7 @@ const actions = [
       },
     },
     {
-      label: "  Delete Owner",
+      label: "Delete Owner",
       click: async () => {
         try {
           const confirmed = await showConfirmationDialog(
@@ -642,6 +667,7 @@ const onSubmit = () => {
   $fetch("/api/v1/userview", {
     method: "PUT",
     body: {
+      show_archived: uiData.showArchived,
       filters: filters,
       columns: uiData.selectedColumns,
     },
@@ -692,6 +718,7 @@ type Filter = {
 };
 
 type UserView = {
+  show_archived: boolean;
   filters: Filter[];
   columns: string[];
 };
@@ -704,11 +731,14 @@ const fetchUserView = () => {
       uiData.selectedFiltersExpanded = {};
       uiData.selectedColumns = [];
       uiData.filterCCs = [];
+      uiData.showArchived = false;
       types.value = {};
 
       // give it a chance for the filters to refresh
       setTimeout(() => {
         var uv = <UserView>response._data;
+        uiData.showArchived = uv.show_archived;
+
         for (const f of uv.filters) {
           if (f.id in uiData.allCCsMap) {
             uiData.selectedFilters.push(f.id);
@@ -821,6 +851,8 @@ const fetchUserView = () => {
             repos_table.columns.push(c);
           }
         }
+
+        fetchRepos();
       }, 0);
     },
   });
@@ -955,6 +987,7 @@ onMounted(() => {
             :filtersOrder="filtersOrder"
             @updateFilters="updateFilters"
             :disabled="loading"
+            :showArchived="uiData.showArchived"
           />
         </template>
       </el-aside>
@@ -1089,6 +1122,11 @@ onMounted(() => {
           <el-button @click="dialog = false">Cancel</el-button>
           <el-button type="primary" @click="onSubmit">Submit</el-button>
         </div>
+      </div>
+
+      <div style="text-align: center">
+        <el-switch v-model="uiData.showArchived" />
+        <span style="margin-left: 10px">Show archived repositories</span>
       </div>
     </el-drawer>
   </div>
