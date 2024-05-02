@@ -22,10 +22,11 @@ import (
 )
 
 type Filter struct {
-	Type   string        `query:"type"`
-	Field  string        `query:"field"`
-	Values []interface{} `query:"values"`
-	Negate bool          `query:"negate"`
+	Type            string        `json:"type"`
+	Field           string        `json:"field"`
+	Values          []interface{} `json:"values"`
+	Negate          bool          `json:"negate"`
+	IncludeZeroTime bool          `json:"include_zero_time"`
 }
 
 type NameCount struct {
@@ -63,6 +64,32 @@ func (a *api) GetRepositories(c *fiber.Ctx) error {
 				filters = append(filters, bson.E{Key: "$nor", Value: values})
 			} else {
 				filters = append(filters, bson.E{Key: "$or", Value: values})
+			}
+		} else if filter.Type == "date" {
+			if len(filter.Values) != 2 {
+				slog.Error("error in GetRepositories: datefilter value size has to be 2")
+				return c.SendStatus(fiber.StatusBadRequest)
+			}
+			start := time.Now().AddDate(0, 0, cast.ToInt(filter.Values[0]))
+			end := time.Now().AddDate(0, 0, cast.ToInt(filter.Values[1]))
+
+			if filter.IncludeZeroTime {
+				filters = append(filters, bson.E{Key: "$or", Value: []bson.D{
+					{
+						{
+							Key:   filter.Field,
+							Value: bson.M{"$gte": start, "$lte": end},
+						},
+					},
+					{
+						{
+							Key:   filter.Field,
+							Value: bson.M{"$eq": time.Time{}},
+						},
+					},
+				}})
+			} else {
+				filters = append(filters, bson.E{Key: filter.Field, Value: bson.M{"$gte": start, "$lte": end}})
 			}
 		} else {
 			if filter.Negate {
@@ -188,6 +215,32 @@ func (a *api) GetRepositoriesGroupBy(c *fiber.Ctx) error {
 				filters = append(filters, bson.E{Key: "$nor", Value: values})
 			} else {
 				filters = append(filters, bson.E{Key: "$or", Value: values})
+			}
+		} else if filter.Type == "date" {
+			if len(filter.Values) != 2 {
+				slog.Error("error in GetRepositories: datefilter value size has to be 2")
+				return c.SendStatus(fiber.StatusBadRequest)
+			}
+			start := time.Now().AddDate(0, 0, cast.ToInt(filter.Values[0]))
+			end := time.Now().AddDate(0, 0, cast.ToInt(filter.Values[1]))
+
+			if filter.IncludeZeroTime {
+				filters = append(filters, bson.E{Key: "$or", Value: []bson.D{
+					{
+						{
+							Key:   filter.Field,
+							Value: bson.M{"$gte": start, "$lte": end},
+						},
+					},
+					{
+						{
+							Key:   filter.Field,
+							Value: bson.M{"$eq": time.Time{}},
+						},
+					},
+				}})
+			} else {
+				filters = append(filters, bson.E{Key: filter.Field, Value: bson.M{"$gte": start, "$lte": end}})
 			}
 		} else {
 			if filter.Negate {

@@ -53,6 +53,7 @@ type ColumnConfig = {
 const loading = ref(false);
 const filters = ref<Record<string, string[]>>({});
 const negates = ref<Record<string, boolean>>({});
+const includeZeroTimes = ref<Record<string, boolean>>({});
 const types = ref<Record<string, string>>({});
 const filtersOrder = ref([]);
 const updateFilters = (field: string) => {
@@ -68,6 +69,10 @@ const transform = (f: Record<string, string[]>) => {
         field: filter,
         values: f[filter],
         negate: negates.value[filter] || false,
+        include_zero_time:
+          filter in includeZeroTimes.value
+            ? includeZeroTimes.value[filter]
+            : true,
       });
     }
   }
@@ -282,12 +287,10 @@ const fetchAllColumns = () => {
       uiData.availableColumns = [];
       uiData.allCCsMap = {};
       response._data.forEach((cc: ColumnConfig) => {
-        if (cc.type != "date") {
-          uiData.availableFilters.push({
-            key: cc.id,
-            label: cc.title,
-          });
-        }
+        uiData.availableFilters.push({
+          key: cc.id,
+          label: cc.title,
+        });
         uiData.availableColumns.push({
           key: cc.id,
           label: cc.title,
@@ -977,13 +980,13 @@ onMounted(() => {
           v-for="c in uiData.filterCCs"
         >
           <Filter
-            v-if="c.type != 'date'"
             :type="c.type"
             :title="c.title"
             :field="c.key"
             :expand="c.filter_expanded"
             :filters="filters"
             :negates="negates"
+            :includeZeroTimes="includeZeroTimes"
             :filtersOrder="filtersOrder"
             @updateFilters="updateFilters"
             :disabled="loading"
