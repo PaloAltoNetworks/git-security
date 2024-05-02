@@ -43,7 +43,13 @@ func (a *api) GetRepositories(c *fiber.Ctx) error {
 	}
 
 	b := struct {
-		Filters []Filter `json:"filters"`
+		Type      *string  `json:"type,omitempty"`
+		Filters   []Filter `json:"filters"`
+		DateRange *struct {
+			Start string `json:"start"`
+			End   string `json:"end"`
+		} `json:"dateRange,omitempty"`
+		Field *string `json:"field,omitempty"`
 	}{}
 	if err := c.BodyParser(&b); err != nil {
 		return err
@@ -53,6 +59,21 @@ func (a *api) GetRepositories(c *fiber.Ctx) error {
 	if !q.Archived {
 		filters = append(filters, bson.E{Key: "is_archived", Value: false})
 	}
+
+	if b.DateRange != nil && b.Field != nil {
+		start, err := time.Parse(time.RFC3339, b.DateRange.Start)
+		if err != nil {
+			return err
+		}
+
+		end, err := time.Parse(time.RFC3339, b.DateRange.End)
+		if err != nil {
+			return err
+		}
+
+		filters = append(filters, bson.E{Key: *b.Field, Value: bson.M{"$gte": end, "$lte": start}})
+	}
+
 	for _, filter := range b.Filters {
 		if filter.Type == "array" {
 			values := bson.A{}
@@ -167,8 +188,13 @@ func (a *api) GetRepositoriesGroupBy(c *fiber.Ctx) error {
 	}
 
 	b := struct {
-		Type    string   `json:"type"`
-		Filters []Filter `json:"filters"`
+		Type      string   `json:"type"`
+		Filters   []Filter `json:"filters"`
+		DateRange *struct {
+			Start string `json:"start"`
+			End   string `json:"end"`
+		} `json:"dateRange,omitempty"`
+		Field *string `json:"field"`
 	}{}
 	if err := c.BodyParser(&b); err != nil {
 		return err
@@ -178,6 +204,21 @@ func (a *api) GetRepositoriesGroupBy(c *fiber.Ctx) error {
 	if !q.Archived {
 		filters = append(filters, bson.E{Key: "is_archived", Value: false})
 	}
+
+	if b.DateRange != nil && b.Field != nil {
+		start, err := time.Parse(time.RFC3339, b.DateRange.Start)
+		if err != nil {
+			return err
+		}
+
+		end, err := time.Parse(time.RFC3339, b.DateRange.End)
+		if err != nil {
+			return err
+		}
+
+		filters = append(filters, bson.E{Key: *b.Field, Value: bson.M{"$gte": end, "$lte": start}})
+	}
+
 	for _, filter := range b.Filters {
 		if filter.Type == "array" {
 			values := bson.A{}

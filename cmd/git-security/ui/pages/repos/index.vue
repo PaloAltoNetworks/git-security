@@ -55,6 +55,32 @@ const filters = ref<Record<string, string[]>>({});
 const negates = ref<Record<string, boolean>>({});
 const types = ref<Record<string, string>>({});
 const filtersOrder = ref([]);
+
+const changedField = ref<string>("");
+const changeType = ref<string>("");
+type DateRange = {
+  start: number;
+  end: number;
+};
+
+const dateRange = ref<DateRange>({
+  start: 0,
+  end: 0,
+});
+
+const updateDateRange = (
+  { start, end }: DateRange,
+  field: string,
+  type: string
+) => {
+  changeType.value = type;
+  changedField.value = field;
+  dateRange.value.start = start;
+  dateRange.value.end = end;
+
+  fetchRepos();
+};
+
 const updateFilters = (field: string) => {
   fetchRepos();
 };
@@ -74,13 +100,39 @@ const transform = (f: Record<string, string[]>) => {
   return results;
 };
 
+const getTimestamp = (daysAgo: any) => {
+  var d = new Date();
+  d.setDate(d.getDate() - daysAgo);
+  return d;
+};
+
 const fetchRepos = () => {
   loading.value = true;
+  type RequestBodyType = {
+    filters: any;
+    dateRange?: {
+      start: string;
+      end: string;
+    };
+    field?: string;
+  };
+
+  let requestBody: RequestBodyType = {
+    filters: transform(filters.value),
+  };
+
+  // If changeType is "date", add dateRange to the object
+  if (changeType.value == "date") {
+    requestBody.dateRange = {
+      start: getTimestamp(dateRange.value.start).toISOString(),
+      end: getTimestamp(dateRange.value.end).toISOString(),
+    };
+    requestBody.field = changedField.value;
+  }
+
   $fetch("/api/v1/repos?archived=" + (uiData.showArchived ? "true" : "false"), {
     method: "POST",
-    body: {
-      filters: transform(filters.value),
-    },
+    body: requestBody,
     onResponse({ response }) {
       loading.value = false;
       repos_table.data = response._data;
@@ -977,7 +1029,6 @@ onMounted(() => {
           v-for="c in uiData.filterCCs"
         >
           <Filter
-            v-if="c.type != 'date'"
             :type="c.type"
             :title="c.title"
             :field="c.key"
@@ -986,6 +1037,7 @@ onMounted(() => {
             :negates="negates"
             :filtersOrder="filtersOrder"
             @updateFilters="updateFilters"
+            @updateDateRange="updateDateRange"
             :disabled="loading"
             :showArchived="uiData.showArchived"
           />
