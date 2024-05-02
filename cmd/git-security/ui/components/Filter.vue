@@ -6,6 +6,7 @@ type Filter = {
   field: string;
   values: any[];
   negate: boolean;
+  include_zero_time: boolean;
 };
 
 type Item = {
@@ -19,6 +20,7 @@ const props = defineProps({
   field: String,
   filters: Object,
   negates: Object,
+  includeZeroTimes: Object,
   filtersOrder: {
     type: Array as PropType<Filter[]>,
     required: true,
@@ -41,7 +43,82 @@ const searchedItems = ref<Item[]>([]);
 const searchedItemsChecked = ref<Item[]>([]);
 const searchedItemsUnchecked = ref<Item[]>([]);
 
-watch([props.filters, props.negates], () => {
+const dateFilter = reactive({
+  value: <number[]>[],
+  history: <number[]>[],
+  minValue: 0,
+  maxValue: 0,
+  step: 1,
+  includeZeroTime: true,
+  includeZeroTimeHistory: true,
+});
+
+const sliderMarks = computed(() => {
+  return {
+    [-1826.25]: "5y",
+    [-1095.75]: "3y",
+    [-365.25]: "1y",
+  };
+});
+
+const updateDateRange = async () => {
+  let filtersOrder = props.filtersOrder;
+  let filters = props.filters;
+  let values = dateFilter.value;
+  props.filters![props.field!] = values;
+  props.includeZeroTimes![props.field!] = dateFilter.includeZeroTime;
+
+  // search if it exists
+  let index = -1;
+  for (const [i, elem] of filtersOrder.entries()) {
+    if (elem.field == props.field) {
+      index = i;
+      break;
+    }
+  }
+
+  if (index >= 0) {
+    // need to detect whether it's removal
+    if (
+      dateFilter.history[0] < values[0] ||
+      dateFilter.history[1] > values[1] ||
+      (dateFilter.includeZeroTimeHistory != dateFilter.includeZeroTime &&
+        !dateFilter.includeZeroTime)
+    ) {
+      // remove all the entries in filters
+      for (let i = index + 1; i < filtersOrder.length; i++) {
+        delete filters![filtersOrder[i].field];
+      }
+      // remove all the things behind index in filtersOrder
+      filtersOrder.splice(index + 1);
+    }
+    filtersOrder[index] = {
+      type: props.type!,
+      field: props.field!,
+      values: values,
+      negate: false,
+      include_zero_time: dateFilter.includeZeroTime,
+    };
+  } else {
+    filtersOrder.push({
+      type: props.type!,
+      field: props.field!,
+      values: dateFilter.value,
+      negate: false,
+      include_zero_time: dateFilter.includeZeroTime,
+    });
+  }
+  dateFilter.includeZeroTimeHistory = dateFilter.includeZeroTime;
+  dateFilter.history = dateFilter.value;
+  emit("updateFilters", props.field);
+};
+
+const formatSliderTooltip = (value: number) => {
+  const daysAgo = Math.abs(value); // Ensure positive value for the number of days ago
+  return `${daysAgo} day${daysAgo !== 1 ? "s" : ""} ago`;
+};
+
+watch([props.filters, props.negates, props.includeZeroTimes], () => {
   // set a timeout here to run the parent eventhandler first
   setTimeout(() => {
     fetchFilters();
@@ -97,12 +174,32 @@ const fetchFilters = async () => {
         filters: filters,
       },
       onResponse({ response }) {
-        items.value = response._data;
-        totalCount.value = 0;
-        response._data.forEach((item: Item) => {
-          totalCount.value = totalCount.value + item.count;
-        });
-        sortFilters();
+        if (props.type == "date") {
+          const dates = response._data
+            .filter((item: Item) => item.name != "0001-01-01T00:00:00Z") // Filter out null values
+            .map((item: Item) => new Date(item.name));
+          let oldestDate = new Date(Math.min(...dates));
+          let newestDate = new Date(Math.max(...dates));
+          const today = new Date();
+          const oldestDiffInTime = today.getTime() - oldestDate.getTime();
+          dateFilter.minValue = -Math.ceil(
+            oldestDiffInTime / (1000 * 60 * 60 * 24)
+          );
+          const newestDiffInTime = today.getTime() - newestDate.getTime();
+          dateFilter.maxValue = -Math.ceil(
+            newestDiffInTime / (1000 * 60 * 60 * 24)
+          );
+          if (!(props.field! in props.filters!)) {
+            dateFilter.value = [dateFilter.minValue, dateFilter.maxValue];
+          }
+        } else {
+          items.value = response._data;
+          totalCount.value = 0;
+          response._data.forEach((item: Item) => {
+            totalCount.value = totalCount.value + item.count;
+          });
+          sortFilters();
+        }
       },
     }
   );
@@ -140,6 +237,7 @@ const checkboxChanged = () => {
         field: props.field!,
         values: values,
         negate: negate,
+        include_zero_time: true,
       };
     } else {
       negateHistory = negate;
@@ -148,6 +246,7 @@ const checkboxChanged = () => {
         field: props.field!,
         values: values,
         negate: negate,
+        include_zero_time: true,
       });
     }
   } else {
@@ -235,103 +334,124 @@ onMounted(async () => {
       <template #title>
         <div class="title">
           {{ title }}
-          <span> ({{ items.length }})</span>
+          <span v-if="props.type != 'date'"> ({{ items.length }})</span>
         </div>
       </template>
-      <el-input
-        v-model="search"
-        clearable
-        class="search"
-        :suffix-icon="Search"
-      />
-      <UButton
-        icon="i-fa6-solid-percent"
-        color="gray"
-        variant="ghost"
-        @click="showPercentage = !showPercentage"
-        :class="{ fade: !showPercentage }"
-      />
-      <UButton
-        :icon="
-          orderBy != 1
-            ? 'i-fa6-solid-arrow-down-a-z'
-            : 'i-fa6-solid-arrow-down-z-a'
-        "
-        color="gray"
-        variant="ghost"
-        @click="changeOrderAlphabet"
-        :class="{ fade: orderBy > 1 }"
-      />
-      <UButton
-        :icon="
-          orderBy != 3
-            ? 'i-fa6-solid-arrow-down-9-1'
-            : 'i-fa6-solid-arrow-down-1-9'
-        "
-        color="gray"
-        variant="ghost"
-        @click="changeOrderCount"
-        :class="{ fade: orderBy < 2 }"
-      />
-      <UButton
-        icon="i-fa6-solid-exclamation"
-        color="gray"
-        variant="ghost"
-        @click="negateSelection"
-        :class="{ fade: !props.negates![props.field!] }"
-        :disabled="props.filters![field!] == undefined || props.filters![field!].length == 0"
-      />
-      <UButton
-        v-if="searchedItemsChecked.length == searchedItems.length"
-        icon="i-fa6-solid-trash-can"
-        color="gray"
-        variant="ghost"
-        @click="clearSelection"
-      />
-      <UButton
-        v-else
-        icon="i-fa6-solid-check-double"
-        color="gray"
-        variant="ghost"
-        @click="selectAll"
-      />
-      <UButton
-        icon="i-fa6-solid-clipboard"
-        color="gray"
-        variant="ghost"
-        @click="copyToClipboard"
-      />
-      <el-checkbox-group
-        v-model="props.filters![field!]"
-        class="scrollable"
-        @change="checkboxChanged()"
-        :disabled="disabled"
-      >
-        <template v-for="item in searchedItems">
-          <div>
-            <el-checkbox :label="item.name">
-              <span v-if="props.type && props.type == 'boolean'">
-                <UIcon
-                  v-if="item.name === false"
-                  name="i-fa6-solid-xmark"
-                  style="color: red"
-                />
-                <UIcon
-                  v-if="item.name === true"
-                  name="i-fa6-solid-check"
-                  style="color: green"
-                />
-              </span>
-              <span v-else>{{ item.name }}</span>
-              ({{
-                showPercentage
-                  ? ((item.count * 100) / totalCount).toPrecision(3) + "%"
-                  : item.count
-              }})
-            </el-checkbox>
-          </div>
-        </template>
-      </el-checkbox-group>
+      <template v-if="props.type == 'date'">
+        <el-slider
+          v-model="dateFilter.value"
+          :range="true"
+          :min="dateFilter.minValue"
+          :max="dateFilter.maxValue"
+          :step="dateFilter.step"
+          :disabled="disabled"
+          @change="updateDateRange"
+          :format-tooltip="formatSliderTooltip"
+          :marks="sliderMarks"
+        />
+        <el-checkbox
+          v-model="dateFilter.includeZeroTime"
+          @change="updateDateRange"
+        >
+          Include Empty Date
+        </el-checkbox>
+      </template>
+      <template v-else>
+        <el-input
+          v-model="search"
+          clearable
+          class="search"
+          :suffix-icon="Search"
+        />
+        <UButton
+          icon="i-fa6-solid-percent"
+          color="gray"
+          variant="ghost"
+          @click="showPercentage = !showPercentage"
+          :class="{ fade: !showPercentage }"
+        />
+        <UButton
+          :icon="
+            orderBy != 1
+              ? 'i-fa6-solid-arrow-down-a-z'
+              : 'i-fa6-solid-arrow-down-z-a'
+          "
+          color="gray"
+          variant="ghost"
+          @click="changeOrderAlphabet"
+          :class="{ fade: orderBy > 1 }"
+        />
+        <UButton
+          :icon="
+            orderBy != 3
+              ? 'i-fa6-solid-arrow-down-9-1'
+              : 'i-fa6-solid-arrow-down-1-9'
+          "
+          color="gray"
+          variant="ghost"
+          @click="changeOrderCount"
+          :class="{ fade: orderBy < 2 }"
+        />
+        <UButton
+          icon="i-fa6-solid-exclamation"
+          color="gray"
+          variant="ghost"
+          @click="negateSelection"
+          :class="{ fade: !props.negates![props.field!] }"
+          :disabled="props.filters![field!] == undefined || props.filters![field!].length == 0"
+        />
+        <UButton
+          v-if="searchedItemsChecked.length == searchedItems.length"
+          icon="i-fa6-solid-trash-can"
+          color="gray"
+          variant="ghost"
+          @click="clearSelection"
+        />
+        <UButton
+          v-else
+          icon="i-fa6-solid-check-double"
+          color="gray"
+          variant="ghost"
+          @click="selectAll"
+        />
+        <UButton
+          icon="i-fa6-solid-clipboard"
+          color="gray"
+          variant="ghost"
+          @click="copyToClipboard"
+        />
+        <el-checkbox-group
+          v-model="props.filters![field!]"
+          class="scrollable"
+          @change="checkboxChanged()"
+          :disabled="disabled"
+        >
+          <template v-for="item in searchedItems">
+            <div>
+              <el-checkbox :label="item.name">
+                <span v-if="props.type && props.type == 'boolean'">
+                  <UIcon
+                    v-if="item.name === false"
+                    name="i-fa6-solid-xmark"
+                    style="color: red"
+                  />
+                  <UIcon
+                    v-if="item.name === true"
+                    name="i-fa6-solid-check"
+                    style="color: green"
+                  />
+                </span>
+                <span v-else>{{ item.name }}</span>
+                ({{
+                  showPercentage
+                    ? ((item.count * 100) / totalCount).toPrecision(3) + "%"
+                    : item.count
+                }})
+              </el-checkbox>
+            </div>
+          </template>
+        </el-checkbox-group>
+      </template>
     </el-collapse-item>
     <el-checkbox-group
       v-if="props.filters![field!]"
@@ -410,5 +530,11 @@ onMounted(async () => {
 button {
   padding: 0px 2px;
   vertical-align: text-bottom;
+}
+
+.el-slider {
+  width: 210px;
+  margin-left: 25px;
+  margin-bottom: 25px;
 }
 </style>
