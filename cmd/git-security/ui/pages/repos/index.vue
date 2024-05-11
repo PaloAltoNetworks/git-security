@@ -59,6 +59,7 @@ const filtersOrder = ref([]);
 const updateFilters = (field: string) => {
   fetchRepos();
 };
+var lastCheckboxCheckedIndex = -1;
 
 const transform = (f: Record<string, string[]>) => {
   let results = [];
@@ -97,6 +98,7 @@ const fetchRepos = () => {
       repos_table.originalData = repos_table.data;
       repos_table_search.text = "";
       repos_table.selected.clear();
+      lastCheckboxCheckedIndex = -1;
     },
   });
 };
@@ -132,7 +134,7 @@ const getDefaultColumns = (): Column<any>[] => [
   {
     key: "selection",
     width: 25,
-    cellRenderer: ({ rowData }) => {
+    cellRenderer: ({ rowData, rowIndex }) => {
       const onChange = (value: CheckboxValueType) => {
         if (value) {
           repos_table.selected.set(rowData["id"], true);
@@ -140,6 +142,32 @@ const getDefaultColumns = (): Column<any>[] => [
           repos_table.selected.delete(rowData["id"]);
         }
       };
+
+      const shiftClick = (e: PointerEvent) => {
+        // setTimeout here to let the checkbox onChange to run first
+        setTimeout(() => {
+          if (repos_table.selected.get(rowData["id"])) {
+            if (e.shiftKey) {
+              if (lastCheckboxCheckedIndex > -1) {
+                let range = [rowIndex, lastCheckboxCheckedIndex];
+                if (rowIndex > lastCheckboxCheckedIndex) {
+                  range = [lastCheckboxCheckedIndex, rowIndex];
+                }
+                for (var i in repos_table.data) {
+                  if (parseInt(i) >= range[0] && parseInt(i) <= range[1]) {
+                    const rowData = repos_table.data[i];
+                    repos_table.selected.set(rowData["id"], true);
+                  }
+                }
+              }
+            }
+            lastCheckboxCheckedIndex = rowIndex;
+          } else {
+            lastCheckboxCheckedIndex = -1;
+          }
+        }, 0);
+      };
+
       return h(
         "div",
         {
@@ -148,6 +176,7 @@ const getDefaultColumns = (): Column<any>[] => [
         h(ElCheckbox, {
           onChange: onChange,
           modelValue: repos_table.selected.has(rowData["id"]),
+          onClick: shiftClick,
         })
       );
     },
@@ -235,6 +264,7 @@ const getDefaultColumns = (): Column<any>[] => [
                   );
                 }
               );
+              lastCheckboxCheckedIndex = -1;
             },
             modelValue: repos_table_search.text,
           })
@@ -786,18 +816,19 @@ const fetchUserView = () => {
                         placement: "right",
                         "show-after": 500,
                       },
-                      h(
-                        "div",
-                        {
-                          style: {
-                            "white-space": "nowrap",
-                            overflow: "hidden",
-                            "text-overflow": "ellipsis",
-                            width: cc.width - 25 + "px",
+                      () =>
+                        h(
+                          "div",
+                          {
+                            style: {
+                              "white-space": "nowrap",
+                              overflow: "hidden",
+                              "text-overflow": "ellipsis",
+                              width: cc.width - 25 + "px",
+                            },
                           },
-                        },
-                        cellData.join(", ")
-                      )
+                          cellData.join(", ")
+                        )
                     )
                   : "";
               } else if (cc.type == "date") {
