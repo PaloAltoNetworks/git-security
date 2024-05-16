@@ -272,6 +272,14 @@ func (app *GitSecurityApp) createIndices(ctx context.Context) error {
 			return err
 		}
 	}
+	for _, idxToCreate := range []string{"name"} {
+		if _, err := app.db.Collection("owners").Indexes().CreateOne(ctx, mongo.IndexModel{
+			Keys:    bson.M{idxToCreate: 1},
+			Options: &options.IndexOptions{Unique: func(b bool) *bool { return &b }(true)},
+		}); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -418,6 +426,15 @@ func (app *GitSecurityApp) createDefaultColumns() error {
 			Title:       "Archived?",
 			Description: "",
 			Key:         "is_archived",
+			Width:       150,
+			Show:        false,
+			Filter:      false,
+		},
+		{
+			Type:        "string",
+			Title:       "Repo Owner Contact",
+			Description: "",
+			Key:         "repo_owner_contact",
 			Width:       150,
 			Show:        false,
 			Filter:      false,
