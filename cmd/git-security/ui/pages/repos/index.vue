@@ -597,35 +597,8 @@ const actions = [
     {
       label: "Update Owner",
       click: () => {
-        try {
-          ElMessageBox.prompt("Please enter the owner name", "Add Owner", {
-            confirmButtonText: "Submit",
-            cancelButtonText: "Cancel",
-          })
-            .then(({ value }) => {
-              if (value || value == null) {
-                $fetch("/api/v1/repos/action/repo-owner", {
-                  method: "POST",
-                  body: {
-                    ids: Array.from(repos_table.selected.keys()),
-                    ownerName: value,
-                  },
-                  onResponse: ({ response }) => {
-                    if (response.status == 200) {
-                      showNotification("success");
-                    } else {
-                      showNotification("error");
-                    }
-                  },
-                });
-              }
-            })
-            .catch((error) => {
-              console.error("An error occurred in Update Owner:", error);
-            });
-        } catch (error) {
-          console.error("An error occurred:", error);
-        }
+        selectedOwnerID.value = "";
+        ownerDialogVisible.value = true;
       },
     },
     {
@@ -637,9 +610,9 @@ const actions = [
           );
           if (confirmed) {
             var ids = Array.from(repos_table.selected.keys());
-            ids = [ids.join(",")];
-            $fetch(`/api/v1/repos/action/delete-owner/${ids}`, {
-              method: "DELETE",
+            $fetch(`/api/v1/repos/action/delete-owner`, {
+              method: "POST",
+              body: ids,
               onResponse: ({ response }) => {
                 if (response.status == 200) {
                   showNotification("success");
@@ -952,9 +925,48 @@ const moveDownSelectedColumn = () => {
   }
 };
 
+type Owner = {
+  id: string;
+  name: string;
+  contact: string;
+  notes: string;
+};
+const ownerDialogVisible = ref<boolean>(false);
+const selectedOwnerID = ref<string>("");
+const owners = ref<Owner[]>([]);
+const fetchOwners = () => {
+  $fetch("/api/v1/owners", {
+    method: "GET",
+    onResponse({ response }) {
+      owners.value = response._data;
+    },
+  });
+};
+
+const updateOwner = () => {
+  ownerDialogVisible.value = false;
+  if (selectedOwnerID.value != "") {
+    $fetch("/api/v1/repos/action/repo-owner", {
+      method: "POST",
+      body: {
+        ids: Array.from(repos_table.selected.keys()),
+        ownerID: selectedOwnerID.value,
+      },
+      onResponse: ({ response }) => {
+        if (response.status == 200) {
+          showNotification("success");
+        } else {
+          showNotification("error");
+        }
+      },
+    });
+  }
+};
+
 onMounted(() => {
   setupWebSocket();
   fetchAllColumns();
+  fetchOwners();
 });
 </script>
 
@@ -1163,6 +1175,24 @@ onMounted(() => {
         <span style="margin-left: 10px">Show archived repositories</span>
       </div>
     </el-drawer>
+
+    <el-dialog v-model="ownerDialogVisible" title="Update Owner" width="500">
+      <el-select v-model="selectedOwnerID" size="large">
+        <template #prefix>Owner</template>
+        <el-option
+          v-for="o in owners"
+          :key="o.id"
+          :label="o.name"
+          :value="o.id"
+        />
+      </el-select>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="ownerDialogVisible = false">Cancel</el-button>
+          <el-button type="primary" @click="updateOwner">Update</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 

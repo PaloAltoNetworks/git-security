@@ -36,6 +36,10 @@ const select = (index: string) => {
             <UIcon name="i-fa6-solid-person-circle-check" class="menu-icon" />
             <span>User Roles</span>
           </el-menu-item>
+          <el-menu-item index="/settings/owners">
+            <UIcon name="i-fa6-solid-users" class="menu-icon" />
+            <span>Owners</span>
+          </el-menu-item>
         </el-menu>
       </el-aside>
       <el-main>

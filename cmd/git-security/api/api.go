@@ -50,11 +50,15 @@ var newPolicies = [][]string{
 	{"user", "/api/v1/repos", "POST"},
 	{"user", "/api/v1/repos/*", "POST"},
 	{"user", "/api/v1/columns", "GET"},
+	{"user", "/api/v1/owners", "GET"},
 	{"user", "/api/v1/userview", "GET"},
 	{"user", "/api/v1/userview", "PUT"},
 	{"user", "/ws", "GET"},
 	{"owneradmin", "/api/v1/repos/action/repo-owner", "POST"},
-	{"owneradmin", "/api/v1/repos/action/delete-owner/*", "DELETE"},
+	{"owneradmin", "/api/v1/repos/action/delete-owner/*", "POST"},
+	{"owneradmin", "/api/v1/owners", "POST"},
+	{"owneradmin", "/api/v1/owner/*", "DELETE"},
+	{"owneradmin", "/api/v1/owner/*", "PUT"},
 }
 
 var rolesDefined = map[string]struct{}{
@@ -197,16 +201,18 @@ func NewFiberApp(
 	v1 := apiRoute.Group("/v1")
 	v1.Delete("/column/:id", a.DeleteColumn)
 	v1.Delete("/custom/:id", a.DeleteCustom)
-	v1.Delete("/repos/action/delete-owner/:ids", a.DeleteRepoOwner)
+	v1.Delete("/owner/:id", a.DeleteOwner)
 	v1.Get("/columns", a.GetColumns)
 	v1.Get("/customs", a.GetCustoms)
 	v1.Get("/globalsettings", a.GetGlobalSettings)
+	v1.Get("/owners", a.GetOwners)
 	v1.Get("/roles", a.GetRoles)
 	v1.Get("/users", a.GetUsers)
 	v1.Get("/userview", a.GetUserView)
 	v1.Post("/columns", a.CreateColumn)
 	v1.Post("/customs", a.CreateCustom)
 	v1.Post("/columns/order", a.ChangeColumnsOrder)
+	v1.Post("/owners", a.CreateOwner)
 	v1.Post("/repos", a.GetRepositories)
 	v1.Post("/repos/:groupBy", a.GetRepositoriesGroupBy)
 	v1.Post("/repos/action/add-branch-protection-rule", a.AddBranchProtectionRule)
@@ -214,6 +220,7 @@ func NewFiberApp(
 	v1.Post("/repos/action/allows-deletions", a.AllowsDeletions)
 	v1.Post("/repos/action/allows-force-pushes", a.AllowsForcePushes)
 	v1.Post("/repos/action/archive-repo", a.ArchiveRepo)
+	v1.Post("/repos/action/delete-owner", a.DeleteRepoOwner)
 	v1.Post("/repos/action/dismisses-stale-reviews", a.DismissesStaleReviews)
 	v1.Post("/repos/action/required-approving-review-count", a.RequiredApprovingReviewCount)
 	v1.Post("/repos/action/requires-code-owner-reviews", a.RequiresCodeOwnerReviews)
@@ -226,6 +233,7 @@ func NewFiberApp(
 	v1.Put("/column/:id", a.UpdateColumn)
 	v1.Put("/custom/:id", a.UpdateCustom)
 	v1.Put("/globalsettings", a.UpdateGlobalSettings)
+	v1.Put("/owner/:id", a.UpdateOwner)
 	v1.Put("/user/:name", a.UpdateUserRoles)
 	v1.Put("/userview", a.UpdateUserView)
 

@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -105,7 +104,7 @@ func (a *api) GetRepositories(c *fiber.Ctx) error {
 	}
 	defer cursor.Close(a.ctx)
 
-	var repos []gh.Repository
+	repos := []gh.Repository{}
 	// TODO: we can't use All if too many
 	if err := cursor.All(a.ctx, &repos); err != nil {
 		return err
@@ -272,7 +271,7 @@ func (a *api) GetRepositoriesGroupBy(c *fiber.Ctx) error {
 		return err
 	}
 
-	var nameCounts []NameCount
+	nameCounts := []NameCount{}
 	if err := cursor.All(a.ctx, &nameCounts); err != nil {
 		return err
 	}
@@ -497,11 +496,26 @@ func (a *api) updateRepository(repo *gh.Repository) error {
 func (a *api) AddRepoOwner(c *fiber.Ctx) error {
 	// Parse the owner name from the request body
 	b := struct {
-		OwnerName string   `json:"ownerName"`
-		IDs       []string `json:"ids"`
+		OwnerID string   `json:"ownerID"`
+		IDs     []string `json:"ids"`
 	}{}
 	if err := c.BodyParser(&b); err != nil {
 		return err
+	}
+
+	id, err := primitive.ObjectIDFromHex(b.OwnerID)
+	if err != nil {
+		return err
+	}
+
+	var owner config.Owner
+	if err := a.db.Collection("owners").FindOne(
+		a.ctx,
+		bson.D{{Key: "_id", Value: id}},
+	).Decode(&owner); err != nil {
+		if err != mongo.ErrNoDocuments {
+			return err
+		}
 	}
 
 	// Find the repositories with the given IDs
@@ -525,7 +539,11 @@ func (a *api) AddRepoOwner(c *fiber.Ctx) error {
 
 		// Update the owner in the database
 		filter := bson.D{{Key: "id", Value: repo.ID}}
-		update := bson.D{{Key: "$set", Value: bson.D{{Key: "repo_owner", Value: b.OwnerName}}}}
+		update := bson.D{{Key: "$set", Value: bson.D{
+			{Key: "repo_owner_id", Value: owner.ID},
+			{Key: "repo_owner", Value: owner.Name},
+			{Key: "repo_owner_contact", Value: owner.Contact},
+		}}}
 		if _, err := a.db.Collection("repositories").UpdateOne(a.ctx, filter, update); err != nil {
 			slog.Error(
 				"error in updating the database",
@@ -534,7 +552,9 @@ func (a *api) AddRepoOwner(c *fiber.Ctx) error {
 			)
 			return err
 		}
-		repo.RepoOwner = b.OwnerName
+		repo.RepoOwnerID = owner.ID
+		repo.RepoOwner = owner.Name
+		repo.RepoOwnerContact = owner.Contact
 		a.broadcastMessage(repo)
 	}
 
@@ -546,13 +566,10 @@ func (a *api) AddRepoOwner(c *fiber.Ctx) error {
 }
 
 func (a *api) DeleteRepoOwner(c *fiber.Ctx) error {
-	// Parse the IDs
-	idsParam := c.Params("ids")
-	if idsParam == "" {
-		return c.SendStatus(fiber.StatusBadRequest)
+	var ids []string
+	if err := c.BodyParser(&ids); err != nil {
+		return err
 	}
-
-	ids := strings.Split(idsParam, ",")
 
 	// Find the repositories with the given IDs
 	cursor, err := a.db.Collection("repositories").Find(a.ctx, bson.D{
@@ -575,7 +592,11 @@ func (a *api) DeleteRepoOwner(c *fiber.Ctx) error {
 
 		// Remove the owner in the database
 		filter := bson.D{{Key: "id", Value: repo.ID}}
-		update := bson.D{{Key: "$unset", Value: bson.D{{Key: "repo_owner", Value: ""}}}}
+		update := bson.D{{Key: "$unset", Value: bson.D{
+			{Key: "repo_owner_id", Value: ""},
+			{Key: "repo_owner", Value: ""},
+			{Key: "repo_owner_contact", Value: ""},
+		}}}
 		if _, err := a.db.Collection("repositories").UpdateOne(a.ctx, filter, update); err != nil {
 			slog.Error(
 				"error in updating the database",

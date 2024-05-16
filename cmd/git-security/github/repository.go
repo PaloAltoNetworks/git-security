@@ -9,18 +9,21 @@ import (
 	"github.com/shurcooL/githubv4"
 	"github.com/spf13/cast"
 	"github.com/tidwall/gjson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type Repository struct {
-	*GqlRepository  `bson:"inline"`
-	Customs         map[string]interface{} `bson:"customs,omitempty" json:"customs,omitempty"`
-	GitHubHost      string                 `bson:"github_host,omitempty" json:"github_host,omitempty"`
-	Score           *int                   `bson:"score,omitempty" json:"score,omitempty"`
-	ScoreColor      *string                `bson:"score_color,omitempty" json:"score_color,omitempty"`
-	FetchedAt       time.Time              `bson:"fetched_at,omitempty" json:"fetched_at,omitempty"`
-	CustomRunAt     time.Time              `bson:"custom_run_at,omitempty" json:"custom_run_at,omitempty"`
-	LastCommittedAt time.Time              `bson:"last_committed_at" json:"last_committed_at"`
-	RepoOwner       string                 `bson:"repo_owner,omitempty" json:"repo_owner,omitempty"`
+	*GqlRepository   `bson:"inline"`
+	Customs          map[string]interface{} `bson:"customs,omitempty" json:"customs,omitempty"`
+	GitHubHost       string                 `bson:"github_host,omitempty" json:"github_host,omitempty"`
+	Score            *int                   `bson:"score,omitempty" json:"score,omitempty"`
+	ScoreColor       *string                `bson:"score_color,omitempty" json:"score_color,omitempty"`
+	FetchedAt        time.Time              `bson:"fetched_at,omitempty" json:"fetched_at,omitempty"`
+	CustomRunAt      time.Time              `bson:"custom_run_at,omitempty" json:"custom_run_at,omitempty"`
+	LastCommittedAt  time.Time              `bson:"last_committed_at" json:"last_committed_at"`
+	RepoOwnerID      primitive.ObjectID     `bson:"repo_owner_id,omitempty" json:"repo_owner_id,omitempty"`
+	RepoOwner        string                 `bson:"repo_owner,omitempty" json:"repo_owner,omitempty"`
+	RepoOwnerContact string                 `bson:"repo_owner_contact,omitempty" json:"repo_owner_contact,omitempty"`
 }
 
 type GqlRepository struct {
