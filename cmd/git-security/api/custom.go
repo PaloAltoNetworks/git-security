@@ -20,7 +20,7 @@ func (a *api) GetCustoms(c *fiber.Ctx) error {
 		return err
 	}
 	defer cursor.Close(a.ctx)
-	var customs []config.Custom
+	customs := []config.Custom{}
 	if err := cursor.All(a.ctx, &customs); err != nil {
 		return err
 	}
