@@ -96,6 +96,10 @@ const fetchRepos = () => {
         [TableV2SortOrder.ASC]
       );
       repos_table.originalData = repos_table.data;
+      repos_table.dataMap.clear();
+      for (let i = 0; i < repos_table.originalData.length; i++) {
+        repos_table.dataMap.set(repos_table.originalData[i].id, i);
+      }
       repos_table_search.text = "";
       repos_table.selected.clear();
       lastCheckboxCheckedIndex = -1;
@@ -345,7 +349,8 @@ const repos_table = reactive({
   selectedDeviceID: null,
   rowKey: "id",
   columns: getDefaultColumns(),
-  originalData: [],
+  dataMap: new Map<string, number>(),
+  originalData: <any>[],
   data: <any>[],
   selected: new Map(),
   sortState: ref<SortBy>({
@@ -631,9 +636,10 @@ const actions = [
 ];
 
 const handleWebSocketMessage = (event: MessageEvent) => {
-  const data = JSON.parse(event.data);
-  if (data) {
-    fetchRepos();
+  const updatedRepo = JSON.parse(event.data);
+  let i = repos_table.dataMap.get(updatedRepo.id);
+  if (i != undefined) {
+    repos_table.originalData[i] = updatedRepo;
   }
 };
 

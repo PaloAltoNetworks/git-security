@@ -494,7 +494,6 @@ func (a *api) updateRepository(repo *gh.Repository) error {
 }
 
 func (a *api) AddRepoOwner(c *fiber.Ctx) error {
-	// Parse the owner name from the request body
 	b := struct {
 		OwnerID string   `json:"ownerID"`
 		IDs     []string `json:"ids"`
@@ -518,38 +517,33 @@ func (a *api) AddRepoOwner(c *fiber.Ctx) error {
 		}
 	}
 
-	// Find the repositories with the given IDs
-	cursor, err := a.db.Collection("repositories").Find(a.ctx, bson.D{
-		bson.E{
-			Key:   "id",
-			Value: bson.M{"$in": b.IDs},
-		},
-	})
+	// Update the owner information
+	filter := bson.M{"id": bson.M{"$in": b.IDs}}
+	update := bson.M{"$set": bson.M{
+		"repo_owner_id":      owner.ID,
+		"repo_owner":         owner.Name,
+		"repo_owner_contact": owner.Contact,
+	}}
+
+	_, err = a.db.Collection("repositories").UpdateMany(a.ctx, filter, update)
+	if err != nil {
+		slog.Error(
+			"error in updating the database",
+			slog.String("error", err.Error()),
+		)
+		return err
+	}
+
+	// Send a broadcast message for each updated repository
+	cursor, err := a.db.Collection("repositories").Find(a.ctx, filter)
 	if err != nil {
 		return err
 	}
 	defer cursor.Close(a.ctx)
 
-	// Update the owner of each repository
 	for cursor.Next(a.ctx) {
 		var repo gh.Repository
 		if err := cursor.Decode(&repo); err != nil {
-			return err
-		}
-
-		// Update the owner in the database
-		filter := bson.D{{Key: "id", Value: repo.ID}}
-		update := bson.D{{Key: "$set", Value: bson.D{
-			{Key: "repo_owner_id", Value: owner.ID},
-			{Key: "repo_owner", Value: owner.Name},
-			{Key: "repo_owner_contact", Value: owner.Contact},
-		}}}
-		if _, err := a.db.Collection("repositories").UpdateOne(a.ctx, filter, update); err != nil {
-			slog.Error(
-				"error in updating the database",
-				slog.String("error", err.Error()),
-				slog.String("repo", repo.Name),
-			)
 			return err
 		}
 		repo.RepoOwnerID = owner.ID
@@ -571,41 +565,33 @@ func (a *api) DeleteRepoOwner(c *fiber.Ctx) error {
 		return err
 	}
 
-	// Find the repositories with the given IDs
-	cursor, err := a.db.Collection("repositories").Find(a.ctx, bson.D{
-		bson.E{
-			Key:   "id",
-			Value: bson.M{"$in": ids},
-		},
-	})
+	// Update the repositories
+	filter := bson.M{"id": bson.M{"$in": ids}}
+	update := bson.M{"$unset": bson.M{
+		"repo_owner_id":      "",
+		"repo_owner":         "",
+		"repo_owner_contact": "",
+	}}
+	_, err := a.db.Collection("repositories").UpdateMany(a.ctx, filter, update)
+	if err != nil {
+		slog.Error(
+			"error in updating the database",
+			slog.String("error", err.Error()),
+		)
+		return err
+	}
+
+	cursor, err := a.db.Collection("repositories").Find(a.ctx, filter)
 	if err != nil {
 		return err
 	}
 	defer cursor.Close(a.ctx)
 
-	// Remove the owner of each repository
 	for cursor.Next(a.ctx) {
 		var repo gh.Repository
 		if err := cursor.Decode(&repo); err != nil {
 			return err
 		}
-
-		// Remove the owner in the database
-		filter := bson.D{{Key: "id", Value: repo.ID}}
-		update := bson.D{{Key: "$unset", Value: bson.D{
-			{Key: "repo_owner_id", Value: ""},
-			{Key: "repo_owner", Value: ""},
-			{Key: "repo_owner_contact", Value: ""},
-		}}}
-		if _, err := a.db.Collection("repositories").UpdateOne(a.ctx, filter, update); err != nil {
-			slog.Error(
-				"error in updating the database",
-				slog.String("error", err.Error()),
-				slog.String("repo", repo.Name),
-			)
-			return err
-		}
-
 		repo.RepoOwner = ""
 		a.broadcastMessage(repo)
 	}

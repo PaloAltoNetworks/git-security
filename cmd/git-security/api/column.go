@@ -23,7 +23,7 @@ func (a *api) GetColumns(c *fiber.Ctx) error {
 		return err
 	}
 	defer cursor.Close(a.ctx)
-	var columns []config.Column
+	columns := []config.Column{}
 	if err := cursor.All(a.ctx, &columns); err != nil {
 		return err
 	}
