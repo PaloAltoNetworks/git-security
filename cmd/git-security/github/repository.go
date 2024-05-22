@@ -93,7 +93,7 @@ type Target struct {
 }
 
 type CommitFragment struct {
-	History History `bson:"history" json:"history" graphql:"history(first: 1)"`
+	History History `bson:"history" json:"history" graphql:"history(first: 10)"`
 }
 
 type History struct {
@@ -102,7 +102,12 @@ type History struct {
 }
 
 type Commit struct {
+	Committer     GitActor  `bson:"-" json:"-"`
 	CommittedDate time.Time `bson:"-" json:"-"`
+}
+
+type GitActor struct {
+	Name string `bson:"-" json:"-"`
 }
 
 func (ghi *GitHubImpl) NewRepository(node GqlRepository) *Repository {
@@ -110,9 +115,12 @@ func (ghi *GitHubImpl) NewRepository(node GqlRepository) *Repository {
 		GqlRepository: &node,
 		GitHubHost:    ghi.githubHost,
 	}
-	commits := r.DefaultBranchRef.Target.Commit.History.Nodes
-	if len(commits) > 0 {
-		r.LastCommittedAt = r.DefaultBranchRef.Target.Commit.History.Nodes[0].CommittedDate
+
+	for _, commit := range r.DefaultBranchRef.Target.Commit.History.Nodes {
+		if _, ok := ghi.ignoredCommitters[commit.Committer.Name]; !ok {
+			r.LastCommittedAt = commit.CommittedDate
+			break
+		}
 	}
 	return r
 }

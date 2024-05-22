@@ -29,17 +29,18 @@ const (
 )
 
 type Opts struct {
-	GitHub         *flag.GitHubOpts
-	Http           *flag.HttpOpts
-	Https          *flag.HttpsOpts
-	Postgres       *flag.PostgresOpts
-	Mongo          *flag.MongoOpts
-	Okta           *flag.OktaOpts
-	Key            string
-	CACert         string
-	DB             string
-	AdminUsernames []string
-	AdminPasswords []string
+	GitHub            *flag.GitHubOpts
+	Http              *flag.HttpOpts
+	Https             *flag.HttpsOpts
+	Postgres          *flag.PostgresOpts
+	Mongo             *flag.MongoOpts
+	Okta              *flag.OktaOpts
+	Key               string
+	CACert            string
+	DB                string
+	AdminUsernames    []string
+	AdminPasswords    []string
+	IgnoredCommitters []string
 }
 
 type GitSecurityApp struct {
@@ -121,7 +122,7 @@ func (app *GitSecurityApp) Run() (interruptible.Stop, error) {
 	app.createDefaultColumns()
 
 	// setup github clients
-	app.g, err = gh.New(ctx, app.opts.GitHub.Host, app.opts.GitHub.PAT, app.opts.CACert)
+	app.g, err = gh.New(ctx, app.opts.GitHub.Host, app.opts.GitHub.PAT, app.opts.CACert, app.opts.IgnoredCommitters)
 	if err != nil {
 		cancel()
 		return nil, err

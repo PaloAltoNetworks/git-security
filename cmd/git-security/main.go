@@ -63,6 +63,13 @@ func main() {
 		EnvVars: []string{"GIT_SECURITY_DB"},
 	})
 
+	flags = append(flags, &cli.StringSliceFlag{
+		Name:    "ignored-committers",
+		Usage:   "ignore the committers when capturing the last commit date",
+		Value:   cli.NewStringSlice(),
+		EnvVars: []string{"GIT_SECURITY_IGNORED_COMMITTERS"},
+	})
+
 	app := &cli.App{
 		Name:    "github-security",
 		Version: "v0.1.0",
@@ -79,17 +86,18 @@ func main() {
 
 			return interruptible.Run(service.New(
 				&service.Opts{
-					GitHub:         flag.GetGitHubOpts(c),
-					Http:           flag.GetHttpOpts(c),
-					Https:          flag.GetHttpsOpts(c),
-					Postgres:       flag.GetPostgresOpts(c),
-					Mongo:          flag.GetMongoOpts(c),
-					Okta:           flag.GetOktaOpts(c),
-					Key:            c.String("key"),
-					CACert:         c.String("cacert"),
-					DB:             c.String("db"),
-					AdminUsernames: c.StringSlice("admin-usernames"),
-					AdminPasswords: c.StringSlice("admin-passwords"),
+					GitHub:            flag.GetGitHubOpts(c),
+					Http:              flag.GetHttpOpts(c),
+					Https:             flag.GetHttpsOpts(c),
+					Postgres:          flag.GetPostgresOpts(c),
+					Mongo:             flag.GetMongoOpts(c),
+					Okta:              flag.GetOktaOpts(c),
+					Key:               c.String("key"),
+					CACert:            c.String("cacert"),
+					DB:                c.String("db"),
+					AdminUsernames:    c.StringSlice("admin-usernames"),
+					AdminPasswords:    c.StringSlice("admin-passwords"),
+					IgnoredCommitters: c.StringSlice("ignored-committers"),
 				},
 			))
 		},

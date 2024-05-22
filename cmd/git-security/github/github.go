@@ -25,10 +25,11 @@ type GitHub interface {
 }
 
 type GitHubImpl struct {
-	ctx        context.Context
-	restClient *github.Client
-	gqlClient  *githubv4.Client
-	githubHost string
+	ctx               context.Context
+	restClient        *github.Client
+	gqlClient         *githubv4.Client
+	githubHost        string
+	ignoredCommitters map[string]interface{}
 }
 
 type customTransport struct {
@@ -39,7 +40,13 @@ func (ct *customTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	return ct.rt.RoundTrip(req)
 }
 
-func New(ctx context.Context, host, pat, caCertPath string) (GitHub, error) {
+func New(
+	ctx context.Context,
+	host string,
+	pat string,
+	caCertPath string,
+	ignoredCommitters []string,
+) (GitHub, error) {
 	ts := oauth2.StaticTokenSource(
 		&oauth2.Token{AccessToken: pat},
 	)
@@ -75,10 +82,16 @@ func New(ctx context.Context, host, pat, caCertPath string) (GitHub, error) {
 		gqlClient = githubv4.NewEnterpriseClient(fmt.Sprintf("%s/api/graphql", u), tc)
 	}
 
+	m := make(map[string]interface{})
+	for _, ic := range ignoredCommitters {
+		m[ic] = struct{}{}
+	}
+
 	return &GitHubImpl{
-		ctx:        ctx,
-		restClient: restClient,
-		gqlClient:  gqlClient,
-		githubHost: host,
+		ctx:               ctx,
+		restClient:        restClient,
+		gqlClient:         gqlClient,
+		githubHost:        host,
+		ignoredCommitters: m,
 	}, nil
 }
