@@ -6,10 +6,16 @@ import (
 	"time"
 
 	"github.com/PaloAltoNetworks/git-security/cmd/git-security/config"
+	"github.com/google/go-github/v57/github"
 	"github.com/shurcooL/githubv4"
 	"github.com/spf13/cast"
 	"github.com/tidwall/gjson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+)
+
+var (
+	preReceiveHookEnabled  = "enabled"
+	preReceiveHookDisabled = "disabled"
 )
 
 type Repository struct {
@@ -388,4 +394,42 @@ func (ghi *GitHubImpl) ArchiveRepository(repoID string, archive bool) error {
 	}
 	slog.Info("unarchiving repo", slog.String("repoID", repoID))
 	return ghi.gqlClient.Mutate(ghi.ctx, &u, uinput, nil)
+}
+
+func (ghi *GitHubImpl) UpdatePreceiveHook(orgName string, repoName string, hookName string, enabled bool) error {
+	var hook *github.PreReceiveHook
+	opts := &github.ListOptions{
+		Page: 1,
+	}
+	for {
+		results, _, err := ghi.restClient.Repositories.ListPreReceiveHooks(ghi.ctx, orgName, repoName, opts)
+		if err != nil {
+			return err
+		}
+		if len(results) == 0 {
+			break
+		}
+		for _, h := range results {
+			if *h.Name == hookName {
+				hook = h
+				break
+			}
+		}
+		if hook != nil {
+			break
+		}
+		opts.Page += 1
+	}
+	if hook != nil {
+		if enabled {
+			hook.Enforcement = &preReceiveHookEnabled
+		} else {
+			hook.Enforcement = &preReceiveHookDisabled
+		}
+		_, _, err := ghi.restClient.Repositories.UpdatePreReceiveHook(ghi.ctx, orgName, repoName, *hook.ID, hook)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

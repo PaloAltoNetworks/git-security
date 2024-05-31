@@ -651,3 +651,54 @@ func (a *api) ArchiveRepo(c *fiber.Ctx) error {
 	}
 	return c.SendStatus(200)
 }
+
+func (a *api) PreReceiveHook(c *fiber.Ctx) error {
+	b := struct {
+		IDs         []string    `json:"ids"`
+		HookName    string      `json:"hookName"`
+		UpdateValue interface{} `json:"updateValue"`
+	}{}
+	if err := c.BodyParser(&b); err != nil {
+		return err
+	}
+
+	cursor, err := a.db.Collection("repositories").Find(a.ctx, bson.D{
+		bson.E{
+			Key:   "id",
+			Value: bson.M{"$in": b.IDs},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	hasError := false
+	for cursor.Next(a.ctx) {
+		var repo gh.Repository
+		if err := cursor.Decode(&repo); err != nil {
+			return err
+		}
+		if err := a.g.UpdatePreceiveHook(
+			repo.Owner.Login, repo.Name, b.HookName, cast.ToBool(b.UpdateValue)); err != nil {
+			slog.Error(
+				"error in UpdatePreceiveHook",
+				slog.String("error", err.Error()),
+				slog.String("repo", repo.Name),
+			)
+			hasError = true
+			continue
+		}
+		if err := a.updateRepository(&repo); err != nil {
+			hasError = true
+			continue
+		}
+	}
+	if err := cursor.Err(); err != nil {
+		return err
+	}
+	defer cursor.Close(a.ctx)
+
+	if hasError {
+		return errors.New("encountered error in PreReceiveHook")
+	}
+	return c.SendStatus(200)
+}

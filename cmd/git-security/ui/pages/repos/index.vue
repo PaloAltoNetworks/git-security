@@ -600,6 +600,15 @@ const actions = [
   ],
   [
     {
+      label: "Pre-receive Hook",
+      click: () => {
+        hookName.value = "";
+        hookDialogVisible.value = true;
+      },
+    },
+  ],
+  [
+    {
       label: "Update Owner",
       click: () => {
         selectedOwnerID.value = "";
@@ -969,6 +978,30 @@ const updateOwner = () => {
   }
 };
 
+const hookDialogVisible = ref<boolean>(false);
+const hookName = ref<string>("");
+const updateHook = (enabled: boolean) => {
+  hookDialogVisible.value = false;
+  let v = hookName.value.trim();
+  if (v != "") {
+    $fetch("/api/v1/repos/action/pre-receive-hook", {
+      method: "POST",
+      body: {
+        ids: Array.from(repos_table.selected.keys()),
+        hookName: v,
+        updateValue: enabled,
+      },
+      onResponse: ({ response }) => {
+        if (response.status == 200) {
+          showNotification("success");
+        } else {
+          showNotification("error");
+        }
+      },
+    });
+  }
+};
+
 onMounted(() => {
   setupWebSocket();
   fetchAllColumns();
@@ -1024,24 +1057,26 @@ onMounted(() => {
             </template>
           </UDropdown>
         </div>
-        <template
-          v-if="uiData.filterCCs.length > 0"
-          v-for="c in uiData.filterCCs"
-        >
-          <Filter
-            :type="c.type"
-            :title="c.title"
-            :field="c.key"
-            :expand="c.filter_expanded"
-            :filters="filters"
-            :negates="negates"
-            :includeZeroTimes="includeZeroTimes"
-            :filtersOrder="filtersOrder"
-            @updateFilters="updateFilters"
-            :disabled="loading"
-            :showArchived="uiData.showArchived"
-          />
-        </template>
+        <div class="filters">
+          <template
+            v-if="uiData.filterCCs.length > 0"
+            v-for="c in uiData.filterCCs"
+          >
+            <Filter
+              :type="c.type"
+              :title="c.title"
+              :field="c.key"
+              :expand="c.filter_expanded"
+              :filters="filters"
+              :negates="negates"
+              :includeZeroTimes="includeZeroTimes"
+              :filtersOrder="filtersOrder"
+              @updateFilters="updateFilters"
+              :disabled="loading"
+              :showArchived="uiData.showArchived"
+            />
+          </template>
+        </div>
       </el-aside>
       <el-main>
         <div :style="{ height: 'calc(100vh - 150px)' }">
@@ -1199,6 +1234,22 @@ onMounted(() => {
         </div>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="hookDialogVisible"
+      title="Update Pre-receive hook"
+      width="500"
+    >
+      <el-input v-model="hookName" clearable>
+        <template #prepend>Pre-receive Hook Name</template>
+      </el-input>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="updateHook(false)">Disable</el-button>
+          <el-button type="primary" @click="updateHook(true)">Enable</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -1209,8 +1260,13 @@ onMounted(() => {
 
 .el-aside {
   direction: rtl;
-  height: calc(100vh - 125px);
-  padding: 20px;
+  padding: 20px 20px 20px 0;
+}
+
+.filters {
+  overflow: scroll;
+  height: calc(100vh - 200px);
+  padding-left: 20px;
 }
 
 .el-collapse {
@@ -1225,6 +1281,7 @@ onMounted(() => {
 
 .filter-buttons {
   direction: ltr;
+  padding-left: 20px;
 }
 
 .actions-button {

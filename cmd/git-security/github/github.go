@@ -22,6 +22,7 @@ type GitHub interface {
 	GetRepos(orgName string) ([]*Repository, error)
 	UpdateBranchProtectionRule(branchProtectionRuleID, field string, value interface{}) error
 	GetRepo(orgName, repoName string) (*Repository, error)
+	UpdatePreceiveHook(orgName string, repoName string, hookName string, enabled bool) error
 }
 
 type GitHubImpl struct {
