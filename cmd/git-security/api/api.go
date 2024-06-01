@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/casbin/casbin/v2"
@@ -18,11 +19,14 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/session"
 	"github.com/gofiber/fiber/v2/utils"
+	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/spf13/cast"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/sync/syncmap"
 
+	"github.com/PaloAltoNetworks/git-security/cmd/git-security/config"
 	gh "github.com/PaloAltoNetworks/git-security/cmd/git-security/github"
 	flag "github.com/eekwong/go-common-flags"
 )
@@ -68,14 +72,16 @@ var rolesDefined = map[string]struct{}{
 }
 
 type api struct {
-	ctx      context.Context
-	db       *mongo.Database
-	g        gh.GitHub
-	key      []byte
-	clients  syncmap.Map
-	store    *session.Store
-	oktaOpts *flag.OktaOpts
-	enforcer *casbin.Enforcer
+	ctx         context.Context
+	db          *mongo.Database
+	g           gh.GitHub
+	key         []byte
+	clients     syncmap.Map
+	store       *session.Store
+	oktaOpts    *flag.OktaOpts
+	enforcer    *casbin.Enforcer
+	loggedCache *expirable.LRU[string, time.Time]
+	mu          sync.Mutex
 }
 
 func NewFiberApp(
@@ -99,13 +105,14 @@ func NewFiberApp(
 	})
 
 	a := api{
-		ctx:      ctx,
-		db:       db,
-		g:        g,
-		key:      key,
-		clients:  syncmap.Map{},
-		store:    store,
-		oktaOpts: oktaOpts,
+		ctx:         ctx,
+		db:          db,
+		g:           g,
+		key:         key,
+		clients:     syncmap.Map{},
+		store:       store,
+		oktaOpts:    oktaOpts,
+		loggedCache: expirable.NewLRU[string, time.Time](1000, nil, time.Hour),
 	}
 
 	app.Get("/ping", func(c *fiber.Ctx) error {
@@ -199,12 +206,17 @@ func NewFiberApp(
 
 	apiRoute := app.Group("/api")
 	v1 := apiRoute.Group("/v1")
+
+	// logged time for activity
+	v1.Use(a.loggedTime)
+
 	v1.Delete("/column/:id", a.DeleteColumn)
 	v1.Delete("/custom/:id", a.DeleteCustom)
 	v1.Delete("/owner/:id", a.DeleteOwner)
 	v1.Get("/columns", a.GetColumns)
 	v1.Get("/customs", a.GetCustoms)
 	v1.Get("/globalsettings", a.GetGlobalSettings)
+	v1.Get("/logged", a.GetLoggeds)
 	v1.Get("/owners", a.GetOwners)
 	v1.Get("/roles", a.GetRoles)
 	v1.Get("/users", a.GetUsers)
@@ -301,4 +313,67 @@ func (a *api) broadcastMessage(repo gh.Repository) {
 		}
 		return true
 	})
+}
+
+func (a *api) loggedTime(c *fiber.Ctx) error {
+	sess, err := a.store.Get(c)
+	if err != nil || sess.Get("username") == nil || cast.ToString(sess.Get("username")) == "" {
+		return c.SendStatus(fiber.StatusForbidden)
+	}
+	username := cast.ToString(sess.Get("username"))
+
+	a.mu.Lock()
+	if ts, ok := a.loggedCache.Get(username); ok && time.Now().Before(ts.Add(10*time.Second)) {
+		a.mu.Unlock()
+		return c.Next()
+	}
+	a.loggedCache.Add(username, time.Now())
+	a.mu.Unlock()
+
+	// try updating the database in a background go routine
+	go func(username string) {
+		now := time.Now()
+		filter := bson.D{
+			{Key: "username", Value: username},
+			{Key: "start", Value: bson.M{"$lte": now}},
+			{Key: "end", Value: bson.M{"$gte": now}},
+		}
+		newEnd := time.Now().Add(time.Minute)
+		var logged config.Logged
+		if err := a.db.Collection("logged").FindOne(
+			a.ctx,
+			filter,
+			options.FindOne().SetSort(bson.D{{Key: "start", Value: -1}}),
+		).Decode(&logged); err != nil {
+			if err != mongo.ErrNoDocuments {
+				slog.Error("error in finding the logged entry", slog.String("err", err.Error()))
+				return
+			}
+			// can't find it, create new record
+			if _, err := a.db.Collection("logged").InsertOne(
+				a.ctx,
+				config.Logged{
+					Username: username,
+					Start:    now,
+					End:      newEnd,
+					Duration: int(newEnd.Sub(now).Seconds()),
+				},
+			); err != nil {
+				slog.Error("error in inserting a logged entry", slog.String("error", err.Error()))
+				return
+			}
+			return
+		}
+		// got the existing record, update the duration and end
+		update := bson.D{{Key: "$set", Value: bson.M{
+			"end":      newEnd,
+			"duration": int(newEnd.Sub(logged.Start).Seconds()),
+		}}}
+		if _, err := a.db.Collection("logged").UpdateByID(a.ctx, logged.ID, update); err != nil {
+			slog.Error("error in updating the logged entry", slog.String("err", err.Error()))
+			return
+		}
+	}(username)
+
+	return c.Next()
 }

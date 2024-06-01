@@ -25,6 +25,9 @@ export default defineNuxtConfig({
     'nuxt-icon',
     'nuxt-lodash'
   ],
+  dayjs: {
+    plugins: ['duration', 'relativeTime'],
+  },
   elementPlus: {
     importStyle: 'scss',
     icon: 'ElIcon'

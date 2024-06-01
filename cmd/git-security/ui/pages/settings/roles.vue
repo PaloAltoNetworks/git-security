@@ -26,6 +26,23 @@ const fetchRoles = () => {
   });
 };
 
+type Logged = {
+  username: string;
+  duration: number;
+};
+const loggeds = ref<Record<string, number>>({});
+const fetchLogged = () => {
+  $fetch("/api/v1/logged", {
+    method: "GET",
+    onResponse({ response }) {
+      loggeds.value = {};
+      response._data.forEach((logged: Logged) => {
+        loggeds.value[logged.username] = logged.duration;
+      });
+    },
+  });
+};
+
 const deleteTag = (idx: number, deletedRole: string) => {
   var roles = users.value[idx].roles.filter((e) => e !== deletedRole);
   updateUserRoleAPI(users.value[idx].name, roles);
@@ -68,12 +85,20 @@ const updateUserRoleAPI = (name: string, roles: string[]) => {
 onMounted(() => {
   fetchUsers();
   fetchRoles();
+  fetchLogged();
 });
 </script>
 
 <template>
   <el-table :data="users" height="calc(100vh - 150px)" style="width: 100%">
     <el-table-column prop="name" label="Name" width="500" />
+    <el-table-column label="Logged time in the last 30 days" width="200">
+      <template #default="scope">
+        <span v-if="loggeds[scope.row.name] > 0">{{
+          useDayjs().duration(loggeds[scope.row.name], "seconds").humanize()
+        }}</span>
+      </template>
+    </el-table-column>
     <el-table-column label="Roles">
       <template #default="scope">
         <div class="flex gap-2">

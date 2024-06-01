@@ -281,6 +281,13 @@ func (app *GitSecurityApp) createIndices(ctx context.Context) error {
 			return err
 		}
 	}
+	for _, idxToCreate := range []string{"username", "start", "end"} {
+		if _, err := app.db.Collection("logged").Indexes().CreateOne(ctx, mongo.IndexModel{
+			Keys: bson.M{idxToCreate: -1},
+		}); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

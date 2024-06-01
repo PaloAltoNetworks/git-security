@@ -2,6 +2,7 @@ package api
 
 import (
 	"log/slog"
+	"time"
 
 	"github.com/PaloAltoNetworks/git-security/cmd/git-security/config"
 
@@ -12,6 +13,11 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+type UsernameDuration struct {
+	Username interface{} `bson:"_id" json:"username"`
+	Duration int         `bson:"duration" json:"duration"`
+}
 
 func (a *api) GetUserView(c *fiber.Ctx) error {
 	sess, err := a.store.Get(c)
@@ -93,4 +99,37 @@ func (a *api) UpdateUserView(c *fiber.Ctx) error {
 		return err
 	}
 	return c.SendStatus(200)
+}
+
+func (a *api) GetLoggeds(c *fiber.Ctx) error {
+	thirtyDaysAgo := time.Now().AddDate(0, 0, -30)
+	filters := bson.D{
+		{Key: "start", Value: bson.M{"$gte": thirtyDaysAgo}},
+	}
+	matchStage := bson.D{{Key: "$match", Value: filters}}
+	sortGroupByStage := bson.D{{Key: "$sort", Value: bson.D{{Key: "username", Value: 1}}}}
+	groupStage := bson.D{
+		{
+			Key: "$group",
+			Value: bson.D{
+				{Key: "_id", Value: "$username"},
+				{Key: "duration", Value: bson.D{{Key: "$sum", Value: "$duration"}}},
+			},
+		},
+	}
+	cursor, err := a.db.Collection("logged").Aggregate(
+		a.ctx,
+		mongo.Pipeline{matchStage, sortGroupByStage, groupStage},
+	)
+	if err != nil {
+		return err
+	}
+
+	durations := []UsernameDuration{}
+	if err := cursor.All(a.ctx, &durations); err != nil {
+		return err
+	}
+	defer cursor.Close(a.ctx)
+
+	return c.JSON(durations)
 }
