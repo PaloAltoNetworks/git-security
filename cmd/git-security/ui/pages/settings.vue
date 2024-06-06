@@ -16,10 +16,6 @@ const select = (index: string) => {
           :style="{ height: 'calc(100vh - 150px)' }"
           @select="select"
         >
-          <el-menu-item index="/settings">
-            <UIcon name="i-fa6-solid-gear" class="menu-icon" />
-            <span>General</span>
-          </el-menu-item>
           <el-menu-item index="/settings/columns">
             <UIcon name="i-fa6-solid-table-columns" class="menu-icon" />
             <span>Columns</span>

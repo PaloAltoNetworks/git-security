@@ -70,5 +70,8 @@ export default defineNuxtConfig({
   },
   ui: {
     icons: ['fa6-solid']
-  }
+  },
+  routeRules: {
+    '/settings': { redirect: '/settings/columns' },
+  },
 })

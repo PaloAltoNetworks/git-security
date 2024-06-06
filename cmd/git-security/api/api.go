@@ -27,6 +27,7 @@ import (
 	"golang.org/x/sync/syncmap"
 
 	"github.com/PaloAltoNetworks/git-security/cmd/git-security/config"
+	"github.com/PaloAltoNetworks/git-security/cmd/git-security/db"
 	gh "github.com/PaloAltoNetworks/git-security/cmd/git-security/github"
 	flag "github.com/eekwong/go-common-flags"
 )
@@ -74,6 +75,7 @@ var rolesDefined = map[string]struct{}{
 type api struct {
 	ctx         context.Context
 	db          *mongo.Database
+	dbw         db.Database
 	g           gh.GitHub
 	key         []byte
 	clients     syncmap.Map
@@ -87,6 +89,7 @@ type api struct {
 func NewFiberApp(
 	ctx context.Context,
 	db *mongo.Database,
+	dbw db.Database,
 	g gh.GitHub,
 	key []byte,
 	adminUsernames []string,
@@ -107,6 +110,7 @@ func NewFiberApp(
 	a := api{
 		ctx:         ctx,
 		db:          db,
+		dbw:         dbw,
 		g:           g,
 		key:         key,
 		clients:     syncmap.Map{},
@@ -221,6 +225,8 @@ func NewFiberApp(
 	v1.Get("/roles", a.GetRoles)
 	v1.Get("/users", a.GetUsers)
 	v1.Get("/userview", a.GetUserView)
+	v1.Post("/changelog", a.GetChangelog)
+	v1.Post("/changelog/:groupBy", a.GetChangelogGroupBy)
 	v1.Post("/columns", a.CreateColumn)
 	v1.Post("/customs", a.CreateCustom)
 	v1.Post("/columns/order", a.ChangeColumnsOrder)

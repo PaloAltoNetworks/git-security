@@ -18,7 +18,6 @@ import (
 	"github.com/kballard/go-shellquote"
 	"github.com/spf13/cast"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/PaloAltoNetworks/git-security/cmd/git-security/config"
 	"github.com/PaloAltoNetworks/git-security/cmd/git-security/security"
@@ -32,27 +31,10 @@ func (app *GitSecurityApp) runCustom() error {
 			Value: false,
 		},
 	}
-	opts := options.Find().SetProjection(
-		bson.D{
-			{Key: "id", Value: 1},
-			{Key: "full_name", Value: 1},
-			{Key: "customs", Value: 1},
-		},
-	)
-	cursor, err := app.db.Collection("repositories").Find(app.ctx, filters, opts)
+	repos, err := app.dbw.ReadRepositories(filters)
 	if err != nil {
 		return err
 	}
-	var repos []struct {
-		ID            string                 `bson:"id" json:"id"`
-		NameWithOwner string                 `bson:"full_name" json:"full_name"`
-		Customs       map[string]interface{} `bson:"customs" json:"customs"`
-	}
-	if err := cursor.All(app.ctx, &repos); err != nil {
-		cursor.Close(app.ctx)
-		return err
-	}
-	cursor.Close(app.ctx)
 
 	// need a map of results for batch mode custom hooks
 	batchedResults := make(map[string]map[string]interface{})
@@ -205,9 +187,7 @@ func (app *GitSecurityApp) runCustom() error {
 						{Key: "customs", Value: repo.Customs},
 						{Key: "custom_run_at", Value: time.Now()},
 					}}}
-					filter := bson.D{{Key: "id", Value: repo.ID}}
-					_, err = app.db.Collection("repositories").UpdateOne(app.ctx, filter, update)
-					if err != nil {
+					if _, err := app.dbw.UpdateRepository(repo.ID, update); err != nil {
 						slog.Error("error in Update()", slog.String("error", err.Error()))
 						break
 					}

@@ -23,12 +23,6 @@ import {
   actionsConfirmationDialog,
 } from "@/common-functions";
 
-interface Option {
-  key: string;
-  label: string;
-  disabled: boolean;
-}
-
 type ColumnType =
   | "string"
   | "number"
@@ -258,16 +252,7 @@ const getDefaultColumns = (): Column<any>[] => [
             },
             onInput: (v) => {
               repos_table_search.text = v;
-              repos_table.data = useFilter(
-                repos_table.originalData,
-                (row: any) => {
-                  return (
-                    row.full_name
-                      .toLowerCase()
-                      .indexOf(repos_table_search.text.toLowerCase()) > -1
-                  );
-                }
-              );
+              refresh_repos_table_data();
               lastCheckboxCheckedIndex = -1;
             },
             modelValue: repos_table_search.text,
@@ -286,7 +271,7 @@ const getDefaultColumns = (): Column<any>[] => [
             onClick: (e: any) => {
               e.stopPropagation();
               repos_table_search.text = "";
-              repos_table.data = repos_table.originalData;
+              refresh_repos_table_data();
             },
             color: "gray",
             circle: true,
@@ -299,6 +284,20 @@ const getDefaultColumns = (): Column<any>[] => [
     },
   },
 ];
+
+const refresh_repos_table_data = () => {
+  if (repos_table_search.text != "") {
+    repos_table.data = useFilter(repos_table.originalData, (row: any) => {
+      return (
+        row.full_name
+          .toLowerCase()
+          .indexOf(repos_table_search.text.toLowerCase()) > -1
+      );
+    });
+  } else {
+    repos_table.data = repos_table.originalData;
+  }
+};
 
 const uiData = reactive({
   filterCCs: <ColumnConfig[]>[],
@@ -649,6 +648,7 @@ const handleWebSocketMessage = (event: MessageEvent) => {
   let i = repos_table.dataMap.get(updatedRepo.id);
   if (i != undefined) {
     repos_table.originalData[i] = updatedRepo;
+    refresh_repos_table_data();
   }
 };
 
@@ -1264,7 +1264,7 @@ onMounted(() => {
 }
 
 .filters {
-  overflow: scroll;
+  overflow: auto;
   height: calc(100vh - 200px);
   padding-left: 20px;
 }

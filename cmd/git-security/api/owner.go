@@ -69,12 +69,13 @@ func (a *api) UpdateOwner(c *fiber.Ctx) error {
 		{Key: "repo_owner", Value: owner.Name},
 		{Key: "repo_owner_contact", Value: owner.Contact},
 	}}}
-	if _, err := a.db.Collection("repositories").UpdateMany(a.ctx, filter, update); err != nil {
-		slog.Error(
-			"error in updating the database",
-			slog.String("error", err.Error()),
-		)
+
+	repos, err := a.dbw.UpdateRepositories(filter, update)
+	if err != nil {
 		return err
+	}
+	for _, r := range repos {
+		a.broadcastMessage(*r)
 	}
 
 	return c.SendStatus(200)
@@ -102,12 +103,13 @@ func (a *api) DeleteOwner(c *fiber.Ctx) error {
 		{Key: "repo_owner", Value: ""},
 		{Key: "repo_owner_contact", Value: ""},
 	}}}
-	if _, err := a.db.Collection("repositories").UpdateMany(a.ctx, filter, update); err != nil {
-		slog.Error(
-			"error in updating the database",
-			slog.String("error", err.Error()),
-		)
+
+	repos, err := a.dbw.UpdateRepositories(filter, update)
+	if err != nil {
 		return err
+	}
+	for _, r := range repos {
+		a.broadcastMessage(*r)
 	}
 
 	return c.SendStatus(200)

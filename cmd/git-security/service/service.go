@@ -20,6 +20,7 @@ import (
 
 	"github.com/PaloAltoNetworks/git-security/cmd/git-security/api"
 	"github.com/PaloAltoNetworks/git-security/cmd/git-security/config"
+	"github.com/PaloAltoNetworks/git-security/cmd/git-security/db"
 	gh "github.com/PaloAltoNetworks/git-security/cmd/git-security/github"
 )
 
@@ -48,6 +49,7 @@ type GitSecurityApp struct {
 	ctx  context.Context
 	opts *Opts
 	db   *mongo.Database
+	dbw  db.Database
 	g    gh.GitHub
 	key  []byte
 }
@@ -111,6 +113,7 @@ func (app *GitSecurityApp) Run() (interruptible.Stop, error) {
 	}
 
 	app.db = m.Database("public")
+	app.dbw = db.New(app.ctx, app.db)
 
 	// create indices
 	if err := app.createIndices(ctx); err != nil {
@@ -135,7 +138,8 @@ func (app *GitSecurityApp) Run() (interruptible.Stop, error) {
 	}
 
 	// web server
-	fiberApp := api.NewFiberApp(ctx, app.db, app.g, app.key, app.opts.AdminUsernames, app.opts.AdminPasswords, app.opts.Okta)
+	fiberApp := api.NewFiberApp(
+		ctx, app.db, app.dbw, app.g, app.key, app.opts.AdminUsernames, app.opts.AdminPasswords, app.opts.Okta)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -288,6 +292,11 @@ func (app *GitSecurityApp) createIndices(ctx context.Context) error {
 			return err
 		}
 	}
+
+	if err := app.dbw.CreateChangelogIndices(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -516,16 +525,12 @@ func (app *GitSecurityApp) fetch() error {
 
 		for _, repo := range repos {
 			// update score and color
-			err := repo.UpdateRepoScoreAndColor(&gs)
-			if err != nil {
+			if err := repo.UpdateRepoScoreAndColor(&gs); err != nil {
 				continue
 			}
 
-			filter := bson.D{{Key: "id", Value: repo.ID}}
-			update := bson.D{{Key: "$set", Value: repo}}
-			_, err = app.db.Collection("repositories").
-				UpdateOne(app.ctx, filter, update, options.Update().SetUpsert(true))
-			if err != nil {
+			update := bson.D{{Key: "$set", Value: *repo}}
+			if _, err := app.dbw.UpdateRepository(repo.ID, update); err != nil {
 				return err
 			}
 		}
@@ -535,17 +540,5 @@ func (app *GitSecurityApp) fetch() error {
 }
 
 func (app *GitSecurityApp) deleteOldRepos(oldRepos int) error {
-
-	t := time.Now().AddDate(0, 0, oldRepos)
-
-	// Create a filter that matches documents where FetchedAt is older than t
-	filter := bson.D{{Key: "fetched_at", Value: bson.D{{Key: "$lt", Value: t}}}}
-
-	// Delete the documents from the repositories collection
-	_, err := app.db.Collection("repositories").DeleteMany(app.ctx, filter)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return app.dbw.DeleteRepositories(time.Now().AddDate(0, 0, oldRepos))
 }

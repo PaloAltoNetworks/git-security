@@ -98,15 +98,8 @@ func (a *api) GetRepositories(c *fiber.Ctx) error {
 			}
 		}
 	}
-	cursor, err := a.db.Collection("repositories").Find(a.ctx, filters)
+	repos, err := a.dbw.ReadRepositories(filters)
 	if err != nil {
-		return err
-	}
-	defer cursor.Close(a.ctx)
-
-	repos := []gh.Repository{}
-	// TODO: we can't use All if too many
-	if err := cursor.All(a.ctx, &repos); err != nil {
 		return err
 	}
 
@@ -313,7 +306,7 @@ func (a *api) AddBranchProtectionRule(c *fiber.Ctx) error {
 		return err
 	}
 
-	cursor, err := a.db.Collection("repositories").Find(a.ctx, bson.D{
+	repos, err := a.dbw.ReadRepositories(bson.D{
 		bson.E{
 			Key:   "id",
 			Value: bson.M{"$in": b.IDs},
@@ -322,12 +315,9 @@ func (a *api) AddBranchProtectionRule(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+
 	hasError := false
-	for cursor.Next(a.ctx) {
-		var repo gh.Repository
-		if err := cursor.Decode(&repo); err != nil {
-			return err
-		}
+	for _, repo := range repos {
 		// check if there's already a protection branch rule
 		if repo.DefaultBranchRef.BranchProtectionRule.ID == "" {
 			if err := a.g.CreateBranchProtectionRule(repo.ID, repo.DefaultBranchRef.Name); err != nil {
@@ -339,7 +329,7 @@ func (a *api) AddBranchProtectionRule(c *fiber.Ctx) error {
 				hasError = true
 				continue
 			}
-			if err := a.updateRepository(&repo); err != nil {
+			if err := a.updateRepository(repo); err != nil {
 				hasError = true
 				continue
 			}
@@ -347,10 +337,6 @@ func (a *api) AddBranchProtectionRule(c *fiber.Ctx) error {
 			slog.Info("ignoring CreateBranchProtectionRule due to an existing one", slog.String("repo", repo.Name))
 		}
 	}
-	if err := cursor.Err(); err != nil {
-		return err
-	}
-	defer cursor.Close(a.ctx)
 
 	if hasError {
 		return errors.New("encountered error in CreateBranchProtectionRule")
@@ -372,7 +358,8 @@ func (a *api) updateBranchProtectionRule(c *fiber.Ctx, updateField string) error
 		// If it's a float64 (which it will be if it's a number), convert to int
 		b.UpdateValue = int(v)
 	}
-	cursor, err := a.db.Collection("repositories").Find(a.ctx, bson.D{
+
+	repos, err := a.dbw.ReadRepositories(bson.D{
 		bson.E{
 			Key:   "id",
 			Value: bson.M{"$in": b.IDs},
@@ -381,12 +368,9 @@ func (a *api) updateBranchProtectionRule(c *fiber.Ctx, updateField string) error
 	if err != nil {
 		return err
 	}
+
 	hasError := false
-	for cursor.Next(a.ctx) {
-		var repo gh.Repository
-		if err := cursor.Decode(&repo); err != nil {
-			return err
-		}
+	for _, repo := range repos {
 		// check if there's already a protection branch rule
 		if repo.DefaultBranchRef.BranchProtectionRule.ID != "" {
 			if err := a.g.UpdateBranchProtectionRule(
@@ -402,7 +386,7 @@ func (a *api) updateBranchProtectionRule(c *fiber.Ctx, updateField string) error
 				hasError = true
 				continue
 			}
-			if err := a.updateRepository(&repo); err != nil {
+			if err := a.updateRepository(repo); err != nil {
 				hasError = true
 				continue
 			}
@@ -410,10 +394,6 @@ func (a *api) updateBranchProtectionRule(c *fiber.Ctx, updateField string) error
 			slog.Info("ignoring UpdateBranchProtectionRule: not existed", slog.String("repo", repo.Name))
 		}
 	}
-	if err := cursor.Err(); err != nil {
-		return err
-	}
-	defer cursor.Close(a.ctx)
 
 	if hasError {
 		return errors.New("encountered error in CreateBranchProtectionRule")
@@ -466,7 +446,6 @@ func (a *api) AllowsDeletions(c *fiber.Ctx) error {
 }
 
 func (a *api) updateRepository(repo *gh.Repository) error {
-
 	updatedRepo, err := a.g.GetRepo(repo.Owner.Login, repo.Name)
 	if err != nil {
 		slog.Error(
@@ -477,19 +456,13 @@ func (a *api) updateRepository(repo *gh.Repository) error {
 		return err
 	}
 
-	updatedRepo.FetchedAt = time.Now()
-	filter := bson.D{{Key: "id", Value: repo.ID}}
 	update := bson.D{{Key: "$set", Value: updatedRepo}}
-	if _, err := a.db.Collection("repositories").
-		UpdateOne(a.ctx, filter, update); err != nil {
-		slog.Error(
-			"error in updating the database",
-			slog.String("error", err.Error()),
-			slog.String("repo", repo.Name),
-		)
+	r, err := a.dbw.UpdateRepository(repo.ID, update)
+	if err != nil {
 		return err
 	}
-	a.broadcastMessage(*updatedRepo)
+
+	a.broadcastMessage(*r)
 	return nil
 }
 
@@ -518,42 +491,19 @@ func (a *api) AddRepoOwner(c *fiber.Ctx) error {
 	}
 
 	// Update the owner information
-	filter := bson.M{"id": bson.M{"$in": b.IDs}}
 	update := bson.M{"$set": bson.M{
 		"repo_owner_id":      owner.ID,
 		"repo_owner":         owner.Name,
 		"repo_owner_contact": owner.Contact,
 	}}
 
-	_, err = a.db.Collection("repositories").UpdateMany(a.ctx, filter, update)
-	if err != nil {
-		slog.Error(
-			"error in updating the database",
-			slog.String("error", err.Error()),
-		)
-		return err
-	}
-
-	// Send a broadcast message for each updated repository
-	cursor, err := a.db.Collection("repositories").Find(a.ctx, filter)
+	repos, err := a.dbw.UpdateRepositoriesByIDs(b.IDs, update)
 	if err != nil {
 		return err
 	}
-	defer cursor.Close(a.ctx)
 
-	for cursor.Next(a.ctx) {
-		var repo gh.Repository
-		if err := cursor.Decode(&repo); err != nil {
-			return err
-		}
-		repo.RepoOwnerID = owner.ID
-		repo.RepoOwner = owner.Name
-		repo.RepoOwnerContact = owner.Contact
-		a.broadcastMessage(repo)
-	}
-
-	if err := cursor.Err(); err != nil {
-		return err
+	for _, repo := range repos {
+		a.broadcastMessage(*repo)
 	}
 
 	return c.SendStatus(200)
@@ -566,38 +516,19 @@ func (a *api) DeleteRepoOwner(c *fiber.Ctx) error {
 	}
 
 	// Update the repositories
-	filter := bson.M{"id": bson.M{"$in": ids}}
 	update := bson.M{"$unset": bson.M{
 		"repo_owner_id":      "",
 		"repo_owner":         "",
 		"repo_owner_contact": "",
 	}}
-	_, err := a.db.Collection("repositories").UpdateMany(a.ctx, filter, update)
-	if err != nil {
-		slog.Error(
-			"error in updating the database",
-			slog.String("error", err.Error()),
-		)
-		return err
-	}
 
-	cursor, err := a.db.Collection("repositories").Find(a.ctx, filter)
+	repos, err := a.dbw.UpdateRepositoriesByIDs(ids, update)
 	if err != nil {
 		return err
 	}
-	defer cursor.Close(a.ctx)
 
-	for cursor.Next(a.ctx) {
-		var repo gh.Repository
-		if err := cursor.Decode(&repo); err != nil {
-			return err
-		}
-		repo.RepoOwner = ""
-		a.broadcastMessage(repo)
-	}
-
-	if err := cursor.Err(); err != nil {
-		return err
+	for _, repo := range repos {
+		a.broadcastMessage(*repo)
 	}
 
 	return c.SendStatus(200)
@@ -612,7 +543,7 @@ func (a *api) ArchiveRepo(c *fiber.Ctx) error {
 		return err
 	}
 
-	cursor, err := a.db.Collection("repositories").Find(a.ctx, bson.D{
+	repos, err := a.dbw.ReadRepositories(bson.D{
 		bson.E{
 			Key:   "id",
 			Value: bson.M{"$in": b.IDs},
@@ -621,12 +552,9 @@ func (a *api) ArchiveRepo(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+
 	hasError := false
-	for cursor.Next(a.ctx) {
-		var repo gh.Repository
-		if err := cursor.Decode(&repo); err != nil {
-			return err
-		}
+	for _, repo := range repos {
 		if a.g.ArchiveRepository(repo.ID, cast.ToBool(b.UpdateValue)); err != nil {
 			slog.Error(
 				"error in ArchiveRepository",
@@ -636,15 +564,11 @@ func (a *api) ArchiveRepo(c *fiber.Ctx) error {
 			hasError = true
 			continue
 		}
-		if err := a.updateRepository(&repo); err != nil {
+		if err := a.updateRepository(repo); err != nil {
 			hasError = true
 			continue
 		}
 	}
-	if err := cursor.Err(); err != nil {
-		return err
-	}
-	defer cursor.Close(a.ctx)
 
 	if hasError {
 		return errors.New("encountered error in ArchiveRepo")
@@ -662,7 +586,7 @@ func (a *api) PreReceiveHook(c *fiber.Ctx) error {
 		return err
 	}
 
-	cursor, err := a.db.Collection("repositories").Find(a.ctx, bson.D{
+	repos, err := a.dbw.ReadRepositories(bson.D{
 		bson.E{
 			Key:   "id",
 			Value: bson.M{"$in": b.IDs},
@@ -671,12 +595,9 @@ func (a *api) PreReceiveHook(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+
 	hasError := false
-	for cursor.Next(a.ctx) {
-		var repo gh.Repository
-		if err := cursor.Decode(&repo); err != nil {
-			return err
-		}
+	for _, repo := range repos {
 		if err := a.g.UpdatePreceiveHook(
 			repo.Owner.Login, repo.Name, b.HookName, cast.ToBool(b.UpdateValue)); err != nil {
 			slog.Error(
@@ -687,15 +608,7 @@ func (a *api) PreReceiveHook(c *fiber.Ctx) error {
 			hasError = true
 			continue
 		}
-		if err := a.updateRepository(&repo); err != nil {
-			hasError = true
-			continue
-		}
 	}
-	if err := cursor.Err(); err != nil {
-		return err
-	}
-	defer cursor.Close(a.ctx)
 
 	if hasError {
 		return errors.New("encountered error in PreReceiveHook")

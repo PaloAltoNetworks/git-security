@@ -20,7 +20,7 @@ var (
 
 type Repository struct {
 	*GqlRepository   `bson:"inline"`
-	Customs          map[string]interface{} `bson:"customs,omitempty" json:"customs,omitempty"`
+	Customs          map[string]interface{} `bson:"customs,omitempty" json:"customs,omitempty" diff:"Customs"`
 	GitHubHost       string                 `bson:"github_host,omitempty" json:"github_host,omitempty"`
 	Score            *int                   `bson:"score,omitempty" json:"score,omitempty"`
 	ScoreColor       *string                `bson:"score_color,omitempty" json:"score_color,omitempty"`
@@ -40,13 +40,13 @@ type GqlRepository struct {
 		Login string `bson:"login" json:"login"`
 	} `bson:"owner" json:"owner"`
 	DefaultBranchRef struct {
-		Name                 string               `bson:"name" json:"name"`
+		Name                 string               `bson:"name" json:"name" diff:"DefaultBranch"`
 		BranchProtectionRule BranchProtectionRule `bson:"branch_protection_rule" json:"branch_protection_rule"`
 		Target               Target               `bson:"target" json:"target"`
 	} `bson:"default_branch" json:"default_branch"`
 	PrimaryLanguage struct {
 		Name string `bson:"name" json:"name"`
-	} `bson:"primary_language" json:"primary_language"`
+	} `bson:"primary_language" json:"primary_language" diff:"Language"`
 	PullRequests        PullRequests `bson:"pull_requests" json:"pull_requests"`
 	Refs                Refs         `bson:"refs" json:"refs" graphql:"refs(first: 0, refPrefix: \"refs/heads/\")"`
 	IsArchived          bool         `bson:"is_archived" json:"is_archived"`
@@ -64,15 +64,15 @@ type GqlRepository struct {
 }
 
 type Refs struct {
-	TotalCount int `bson:"total_count" json:"total_count"`
+	TotalCount int `bson:"total_count" json:"total_count" diff:"RefsTotalCount"`
 }
 
 type PullRequests struct {
-	TotalCount int `bson:"total_count" json:"total_count"`
+	TotalCount int `bson:"total_count" json:"total_count" diff:"PRTotalCount"`
 }
 
 type BranchProtectionRule struct {
-	ID                           string `bson:"id" json:"id"`
+	ID                           string `bson:"id" json:"id" diff:"BranchProtectionRuleID"`
 	Pattern                      string `bson:"pattern" json:"pattern"`
 	AllowsForcePushes            bool   `bson:"allows_force_pushes" json:"allows_force_pushes"`
 	AllowsDeletions              bool   `bson:"allows_deletion" json:"allows_deletion"`
@@ -104,7 +104,7 @@ type CommitFragment struct {
 
 type History struct {
 	Nodes      []Commit `bson:"-" json:"-"`
-	TotalCount int      `bson:"total_count" json:"total_count"`
+	TotalCount int      `bson:"total_count" json:"total_count" diff:"HistoryTotalCount"`
 }
 
 type Commit struct {
@@ -183,7 +183,10 @@ func (ghi *GitHubImpl) GetRepo(orgName, repoName string) (*Repository, error) {
 		return nil, err
 	}
 
-	return ghi.NewRepository(q.Repository), nil
+	r := ghi.NewRepository(q.Repository)
+	r.FetchedAt = time.Now()
+
+	return r, nil
 }
 
 func (ghi *GitHubImpl) CreateBranchProtectionRule(repoID, pattern string) error {
