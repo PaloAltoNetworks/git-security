@@ -194,7 +194,7 @@ func (dbi *DatabaseImpl) UpdateRepository(repoID string, update interface{}) (*g
 		for field, change := range createDiffLog(r, *newRecord) {
 			dbi.CreateChangelog(newRecord, field, change[0], change[1])
 		}
-	} else {
+	} else if newRecord.GqlRepository != nil && newRecord.ID != "" {
 		// create
 		dbi.CreateChangelog(newRecord, "New Repo", "", "")
 	}
@@ -206,6 +206,9 @@ func (dbi *DatabaseImpl) UpdateRepository(repoID string, update interface{}) (*g
 }
 
 func (dbi *DatabaseImpl) DeleteRepositories(before time.Time) error {
+	dbi.mu.Lock()
+	defer dbi.mu.Unlock()
+
 	// Create a filter that matches documents where FetchedAt is older than t
 	filter := bson.D{{Key: "fetched_at", Value: bson.D{{Key: "$lt", Value: before}}}}
 
@@ -221,6 +224,7 @@ func (dbi *DatabaseImpl) DeleteRepositories(before time.Time) error {
 	}
 
 	for _, repo := range repos {
+		delete(dbi.repos, repo.ID)
 		dbi.CreateChangelog(repo, "Delete Repo", "", "")
 	}
 

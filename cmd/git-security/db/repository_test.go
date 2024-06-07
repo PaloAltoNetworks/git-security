@@ -19,7 +19,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-func setupDB(t *testing.T) (func(), Database) {
+func setupDB(t *testing.T) (func(), Database, *mongo.Database) {
 	dir, _ := os.MkdirTemp(os.TempDir(), "")
 
 	listener, err := net.Listen("tcp", "localhost:0")
@@ -56,11 +56,11 @@ func setupDB(t *testing.T) (func(), Database) {
 		cancel()
 		wg.Wait()
 		os.RemoveAll(dir)
-	}, New(ctx, m.Database("public"))
+	}, New(ctx, m.Database("public")), m.Database("public")
 }
 
 func TestUpdateRepositorySimple(t *testing.T) {
-	teardown, db := setupDB(t)
+	teardown, db, _ := setupDB(t)
 	defer teardown()
 
 	repo := gh.Repository{
@@ -83,6 +83,7 @@ func TestUpdateRepositorySimple(t *testing.T) {
 	require.Nil(t, err)
 	require.Equal(t, 1, len(log))
 	assert.Equal(t, "New Repo", log[0].Field)
+	assert.Equal(t, "foobar", log[0].RepoID)
 
 	repo.IsArchived = true
 	r, err := db.UpdateRepository(repo.ID, bson.D{{Key: "$set", Value: repo}}) // check return value
@@ -166,7 +167,7 @@ func TestCreateDiffLogMapAndAddRemoved(t *testing.T) {
 }
 
 func TestUpdateRepositoriesByIDs(t *testing.T) {
-	teardown, db := setupDB(t)
+	teardown, db, _ := setupDB(t)
 	defer teardown()
 
 	for i := range 10 {
@@ -205,7 +206,7 @@ func TestUpdateRepositoriesByIDs(t *testing.T) {
 }
 
 func TestUpdateRepositories(t *testing.T) {
-	teardown, db := setupDB(t)
+	teardown, db, _ := setupDB(t)
 	defer teardown()
 
 	for i := range 100 {
@@ -246,7 +247,7 @@ func TestUpdateRepositories(t *testing.T) {
 }
 
 func TestDeleteRepositories(t *testing.T) {
-	teardown, db := setupDB(t)
+	teardown, db, _ := setupDB(t)
 	defer teardown()
 
 	for i := range 100 {
@@ -269,4 +270,40 @@ func TestDeleteRepositories(t *testing.T) {
 	log, err := db.ReadChangelog(bson.D{})
 	require.Nil(t, err)
 	require.Equal(t, 170, len(log))
+}
+
+// corner case when the server starts up
+// runCustoms() and deleteOldRepos() happens at the same time
+func TestBugNewRepoChangelogEmptyName(t *testing.T) {
+	teardown, db, mdb := setupDB(t)
+	defer teardown()
+
+	// the record exists before the server starts up
+	mdb.Collection(repositoriesTableName).InsertOne(context.Background(), gh.Repository{
+		GqlRepository: &gh.GqlRepository{
+			ID: "foobar",
+		},
+		FetchedAt: time.Now().AddDate(0, 0, -35),
+	})
+
+	// in runCustom(), ReadRepositories() runs and loops
+	repos, err := db.ReadRepositories(bson.D{})
+	require.Nil(t, err)
+	assert.Equal(t, 1, len(repos))
+
+	// delete routine happens to run after "repos" was fetched
+	err = db.DeleteRepositories(time.Now().AddDate(0, 0, -30))
+	require.Nil(t, err)
+
+	// in runCustom(), app.dbw.UpdateRepository(repo.ID, update) runs but the record is gone
+	update := bson.D{{Key: "$set", Value: bson.D{
+		{Key: "customs", Value: make(map[string]interface{})},
+		{Key: "custom_run_at", Value: time.Now()},
+	}}}
+	_, err = db.UpdateRepository("foobar", update)
+	require.Nil(t, err)
+
+	log, err := db.ReadChangelog(bson.D{})
+	require.Nil(t, err)
+	require.Equal(t, 1, len(log))
 }
