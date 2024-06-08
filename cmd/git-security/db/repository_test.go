@@ -260,6 +260,13 @@ func TestDeleteRepositories(t *testing.T) {
 		db.UpdateRepository(strconv.Itoa(i), update)
 	}
 
+	update := bson.D{{Key: "$set", Value: gh.Repository{
+		GqlRepository: &gh.GqlRepository{
+			ID: "empty fetched_at",
+		},
+	}}}
+	db.UpdateRepository("empty fetched_at", update)
+
 	err := db.DeleteRepositories(time.Now().AddDate(0, 0, -30))
 	require.Nil(t, err)
 
@@ -269,7 +276,7 @@ func TestDeleteRepositories(t *testing.T) {
 
 	log, err := db.ReadChangelog(bson.D{})
 	require.Nil(t, err)
-	require.Equal(t, 170, len(log))
+	require.Equal(t, 172, len(log))
 }
 
 // corner case when the server starts up

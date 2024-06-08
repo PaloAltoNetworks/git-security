@@ -209,8 +209,15 @@ func (dbi *DatabaseImpl) DeleteRepositories(before time.Time) error {
 	dbi.mu.Lock()
 	defer dbi.mu.Unlock()
 
-	// Create a filter that matches documents where FetchedAt is older than t
-	filter := bson.D{{Key: "fetched_at", Value: bson.D{{Key: "$lt", Value: before}}}}
+	// Create a filter that matches documents where FetchedAt is older than t or missing
+	filter := bson.D{
+		{
+			Key: "fetched_at",
+			Value: bson.M{
+				"$not": bson.M{"$gt": before},
+			},
+		},
+	}
 
 	// find the existing documents first
 	repos, err := dbi.ReadRepositories(filter)
