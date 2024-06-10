@@ -278,7 +278,7 @@ onMounted(async () => {
         :class="{ fade: orderBy < 2 }"
       />
       <UButton
-        icon="i-fa6-solid-exclamation"
+        icon="i-fa6-solid-not-equal"
         color="gray"
         variant="ghost"
         @click="negateSelection"
