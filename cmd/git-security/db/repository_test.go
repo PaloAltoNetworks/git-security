@@ -73,7 +73,7 @@ func TestUpdateRepositorySimple(t *testing.T) {
 	require.Nil(t, err)
 	require.Equal(t, 0, len(repos))
 
-	db.UpdateRepository(repo.ID, bson.D{{Key: "$set", Value: repo}})
+	db.UpdateRepository(repo.ID, bson.D{{Key: "$set", Value: repo}}, true)
 	repos, err = db.ReadRepositories(bson.D{})
 	require.Nil(t, err)
 	require.Equal(t, 1, len(repos))
@@ -86,7 +86,7 @@ func TestUpdateRepositorySimple(t *testing.T) {
 	assert.Equal(t, "foobar", log[0].RepoID)
 
 	repo.IsArchived = true
-	r, err := db.UpdateRepository(repo.ID, bson.D{{Key: "$set", Value: repo}}) // check return value
+	r, err := db.UpdateRepository(repo.ID, bson.D{{Key: "$set", Value: repo}}, true) // check return value
 	require.Nil(t, err)
 	assert.Equal(t, true, r.IsArchived)
 
@@ -177,7 +177,7 @@ func TestUpdateRepositoriesByIDs(t *testing.T) {
 				IsArchived: false,
 			},
 		}}}
-		db.UpdateRepository(strconv.Itoa(i), update)
+		db.UpdateRepository(strconv.Itoa(i), update, true)
 	}
 	repos, err := db.ReadRepositories(bson.D{})
 	require.Nil(t, err)
@@ -216,7 +216,7 @@ func TestUpdateRepositories(t *testing.T) {
 				IsArchived: false,
 			},
 		}}}
-		db.UpdateRepository(strconv.Itoa(i), update)
+		db.UpdateRepository(strconv.Itoa(i), update, true)
 	}
 
 	filters := bson.D{{Key: "is_archived", Value: false}}
@@ -257,7 +257,7 @@ func TestDeleteRepositories(t *testing.T) {
 			},
 			FetchedAt: time.Now().AddDate(0, 0, i*-1),
 		}}}
-		db.UpdateRepository(strconv.Itoa(i), update)
+		db.UpdateRepository(strconv.Itoa(i), update, true)
 	}
 
 	update := bson.D{{Key: "$set", Value: gh.Repository{
@@ -265,7 +265,7 @@ func TestDeleteRepositories(t *testing.T) {
 			ID: "empty fetched_at",
 		},
 	}}}
-	db.UpdateRepository("empty fetched_at", update)
+	db.UpdateRepository("empty fetched_at", update, true)
 
 	err := db.DeleteRepositories(time.Now().AddDate(0, 0, -30))
 	require.Nil(t, err)
@@ -288,7 +288,8 @@ func TestBugNewRepoChangelogEmptyName(t *testing.T) {
 	// the record exists before the server starts up
 	mdb.Collection(repositoriesTableName).InsertOne(context.Background(), gh.Repository{
 		GqlRepository: &gh.GqlRepository{
-			ID: "foobar",
+			ID:   "foobar",
+			Name: "reponame",
 		},
 		FetchedAt: time.Now().AddDate(0, 0, -35),
 	})
@@ -307,8 +308,12 @@ func TestBugNewRepoChangelogEmptyName(t *testing.T) {
 		{Key: "customs", Value: make(map[string]interface{})},
 		{Key: "custom_run_at", Value: time.Now()},
 	}}}
-	_, err = db.UpdateRepository("foobar", update)
+	_, err = db.UpdateRepository("foobar", update, false)
 	require.Nil(t, err)
+
+	repos, err = db.ReadRepositories(bson.D{})
+	require.Nil(t, err)
+	assert.Equal(t, 0, len(repos))
 
 	log, err := db.ReadChangelog(bson.D{})
 	require.Nil(t, err)

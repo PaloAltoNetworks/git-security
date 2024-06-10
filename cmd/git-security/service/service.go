@@ -530,7 +530,7 @@ func (app *GitSecurityApp) fetch() error {
 			}
 
 			update := bson.D{{Key: "$set", Value: *repo}}
-			if _, err := app.dbw.UpdateRepository(repo.ID, update); err != nil {
+			if _, err := app.dbw.UpdateRepository(repo.ID, update, true); err != nil {
 				return err
 			}
 		}

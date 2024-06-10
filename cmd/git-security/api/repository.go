@@ -457,7 +457,7 @@ func (a *api) updateRepository(repo *gh.Repository) error {
 	}
 
 	update := bson.D{{Key: "$set", Value: updatedRepo}}
-	r, err := a.dbw.UpdateRepository(repo.ID, update)
+	r, err := a.dbw.UpdateRepository(repo.ID, update, true)
 	if err != nil {
 		return err
 	}

@@ -18,7 +18,7 @@ type Database interface {
 	ReadRepositories(filters interface{}) ([]*gh.Repository, error)
 	UpdateRepositories(filters interface{}, update interface{}) ([]*gh.Repository, error)
 	UpdateRepositoriesByIDs(repoIDs []string, update interface{}) ([]*gh.Repository, error)
-	UpdateRepository(repoID string, update interface{}) (*gh.Repository, error)
+	UpdateRepository(repoID string, update interface{}, upsert bool) (*gh.Repository, error)
 }
 
 type DatabaseImpl struct {

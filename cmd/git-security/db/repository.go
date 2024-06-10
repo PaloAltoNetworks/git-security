@@ -154,7 +154,11 @@ func (dbi *DatabaseImpl) getRepoFromCache(repoID string) (gh.Repository, bool, e
 	return r, true, nil
 }
 
-func (dbi *DatabaseImpl) UpdateRepository(repoID string, update interface{}) (*gh.Repository, error) {
+func (dbi *DatabaseImpl) UpdateRepository(
+	repoID string,
+	update interface{},
+	upsert bool,
+) (*gh.Repository, error) {
 	dbi.mu.Lock()
 	defer dbi.mu.Unlock()
 
@@ -171,7 +175,7 @@ func (dbi *DatabaseImpl) UpdateRepository(repoID string, update interface{}) (*g
 		Upsert:         new(bool),
 		ReturnDocument: &rd,
 	}
-	*options.Upsert = true
+	*options.Upsert = upsert
 
 	if err := dbi.db.Collection(repositoriesTableName).FindOneAndUpdate(
 		dbi.ctx,
@@ -189,18 +193,20 @@ func (dbi *DatabaseImpl) UpdateRepository(repoID string, update interface{}) (*g
 		}
 	}
 
-	if ok {
-		// update
-		for field, change := range createDiffLog(r, *newRecord) {
-			dbi.CreateChangelog(newRecord, field, change[0], change[1])
+	if newRecord != nil {
+		if ok {
+			// update
+			for field, change := range createDiffLog(r, *newRecord) {
+				dbi.CreateChangelog(newRecord, field, change[0], change[1])
+			}
+		} else if newRecord.GqlRepository != nil && newRecord.ID != "" {
+			// create
+			dbi.CreateChangelog(newRecord, "New Repo", "", "")
 		}
-	} else if newRecord.GqlRepository != nil && newRecord.ID != "" {
-		// create
-		dbi.CreateChangelog(newRecord, "New Repo", "", "")
-	}
 
-	// put the latest version back to cache
-	dbi.repos[repoID] = *newRecord
+		// put the latest version back to cache
+		dbi.repos[repoID] = *newRecord
+	}
 
 	return newRecord, nil
 }

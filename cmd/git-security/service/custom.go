@@ -187,7 +187,7 @@ func (app *GitSecurityApp) runCustom() error {
 						{Key: "customs", Value: repo.Customs},
 						{Key: "custom_run_at", Value: time.Now()},
 					}}}
-					if _, err := app.dbw.UpdateRepository(repo.ID, update); err != nil {
+					if _, err := app.dbw.UpdateRepository(repo.ID, update, false); err != nil {
 						slog.Error("error in Update()", slog.String("error", err.Error()))
 						break
 					}
