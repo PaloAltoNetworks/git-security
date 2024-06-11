@@ -555,7 +555,7 @@ func (a *api) ArchiveRepo(c *fiber.Ctx) error {
 
 	hasError := false
 	for _, repo := range repos {
-		if a.g.ArchiveRepository(repo.ID, cast.ToBool(b.UpdateValue)); err != nil {
+		if err := a.g.ArchiveRepository(repo.ID, cast.ToBool(b.UpdateValue)); err != nil {
 			slog.Error(
 				"error in ArchiveRepository",
 				slog.String("error", err.Error()),
