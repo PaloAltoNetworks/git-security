@@ -2,65 +2,18 @@ package db
 
 import (
 	"context"
-	"fmt"
-	"net"
-	"os"
 	"strconv"
-	"sync"
 	"testing"
 	"time"
 
-	"github.com/FerretDB/FerretDB/ferretdb"
 	gh "github.com/PaloAltoNetworks/git-security/cmd/git-security/github"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-func setupDB(t *testing.T) (func(), Database, *mongo.Database) {
-	dir, _ := os.MkdirTemp(os.TempDir(), "")
-
-	listener, err := net.Listen("tcp", "localhost:0")
-	require.Nil(t, err)
-	port := listener.Addr().(*net.TCPAddr).Port
-	require.Nil(t, listener.Close())
-
-	f, err := ferretdb.New(&ferretdb.Config{
-		Listener: ferretdb.ListenerConfig{
-			TCP: fmt.Sprintf("localhost:%d", port),
-		},
-		Handler:   "sqlite",
-		SQLiteURL: fmt.Sprintf("file:%s/", dir),
-	})
-	require.Nil(t, err)
-
-	ctx, cancel := context.WithCancel(context.Background())
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		if err := f.Run(ctx); err != nil {
-			require.Nil(t, err)
-		}
-	}()
-
-	uri := f.MongoDBURI()
-
-	m, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
-	require.Nil(t, err)
-
-	return func() {
-		cancel()
-		wg.Wait()
-		os.RemoveAll(dir)
-	}, New(ctx, m.Database("public")), m.Database("public")
-}
-
 func TestUpdateRepositorySimple(t *testing.T) {
-	teardown, db, _ := setupDB(t)
+	teardown, db, _ := SetupDBForTest(t)
 	defer teardown()
 
 	repo := gh.Repository{
@@ -167,7 +120,7 @@ func TestCreateDiffLogMapAndAddRemoved(t *testing.T) {
 }
 
 func TestUpdateRepositoriesByIDs(t *testing.T) {
-	teardown, db, _ := setupDB(t)
+	teardown, db, _ := SetupDBForTest(t)
 	defer teardown()
 
 	for i := range 10 {
@@ -206,7 +159,7 @@ func TestUpdateRepositoriesByIDs(t *testing.T) {
 }
 
 func TestUpdateRepositories(t *testing.T) {
-	teardown, db, _ := setupDB(t)
+	teardown, db, _ := SetupDBForTest(t)
 	defer teardown()
 
 	for i := range 100 {
@@ -247,7 +200,7 @@ func TestUpdateRepositories(t *testing.T) {
 }
 
 func TestDeleteRepositories(t *testing.T) {
-	teardown, db, _ := setupDB(t)
+	teardown, db, _ := SetupDBForTest(t)
 	defer teardown()
 
 	for i := range 100 {
@@ -282,7 +235,7 @@ func TestDeleteRepositories(t *testing.T) {
 // corner case when the server starts up
 // runCustoms() and deleteOldRepos() happens at the same time
 func TestBugNewRepoChangelogEmptyName(t *testing.T) {
-	teardown, db, mdb := setupDB(t)
+	teardown, db, mdb := SetupDBForTest(t)
 	defer teardown()
 
 	// the record exists before the server starts up
