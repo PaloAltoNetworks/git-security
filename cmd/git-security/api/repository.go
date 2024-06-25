@@ -104,11 +104,10 @@ func (a *api) GetRepositories(c *fiber.Ctx) error {
 	}
 
 	if q.CSV {
-		sess, err := a.store.Get(c)
+		username, err := a.getUsernameFromSession(c)
 		if err != nil {
 			return err
 		}
-		username := cast.ToString(sess.Get("username"))
 
 		var uv config.UserView
 		if err := a.db.Collection("userviews").FindOne(
@@ -148,11 +147,6 @@ func (a *api) GetRepositories(c *fiber.Ctx) error {
 				return err
 			}
 			values := []string{r.Name}
-			for _, c := range columns {
-				if c.CSV {
-					values = append(values, gjson.GetBytes(rjson, c.Key).String())
-				}
-			}
 			for _, uvc := range uv.Columns {
 				if c, ok := columnsMap[uvc.String()]; ok {
 					values = append(values, gjson.GetBytes(rjson, c.Key).String())

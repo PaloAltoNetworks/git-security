@@ -7,7 +7,6 @@ import (
 	"github.com/PaloAltoNetworks/git-security/cmd/git-security/config"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/spf13/cast"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -20,11 +19,10 @@ type UsernameDuration struct {
 }
 
 func (a *api) GetUserView(c *fiber.Ctx) error {
-	sess, err := a.store.Get(c)
+	username, err := a.getUsernameFromSession(c)
 	if err != nil {
 		return err
 	}
-	username := cast.ToString(sess.Get("username"))
 
 	var uv config.UserView
 	if err := a.db.Collection("userviews").FindOne(
@@ -80,11 +78,10 @@ func (a *api) GetUserView(c *fiber.Ctx) error {
 }
 
 func (a *api) UpdateUserView(c *fiber.Ctx) error {
-	sess, err := a.store.Get(c)
+	username, err := a.getUsernameFromSession(c)
 	if err != nil {
 		return err
 	}
-	username := cast.ToString(sess.Get("username"))
 
 	var uv config.UserView
 	if err := c.BodyParser(&uv); err != nil {
