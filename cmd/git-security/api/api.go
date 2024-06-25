@@ -73,17 +73,18 @@ var rolesDefined = map[string]struct{}{
 }
 
 type api struct {
-	ctx         context.Context
-	db          *mongo.Database
-	dbw         db.Database
-	g           gh.GitHub
-	key         []byte
-	clients     syncmap.Map
-	store       *session.Store
-	oktaOpts    *flag.OktaOpts
-	enforcer    *casbin.Enforcer
-	loggedCache *expirable.LRU[string, time.Time]
-	mu          sync.Mutex
+	ctx                    context.Context
+	db                     *mongo.Database
+	dbw                    db.Database
+	g                      gh.GitHub
+	key                    []byte
+	clients                syncmap.Map
+	store                  *session.Store
+	oktaOpts               *flag.OktaOpts
+	enforcer               *casbin.Enforcer
+	loggedCache            *expirable.LRU[string, time.Time]
+	mu                     sync.Mutex
+	getUsernameFromSession func(c *fiber.Ctx) (string, error)
 }
 
 func NewFiberApp(
@@ -117,6 +118,14 @@ func NewFiberApp(
 		store:       store,
 		oktaOpts:    oktaOpts,
 		loggedCache: expirable.NewLRU[string, time.Time](1000, nil, time.Hour),
+		getUsernameFromSession: func(c *fiber.Ctx) (string, error) {
+			sess, err := store.Get(c)
+			if err != nil || sess.Get("username") == nil || cast.ToString(sess.Get("username")) == "" {
+				return "", c.SendStatus(fiber.StatusForbidden)
+			}
+			username := cast.ToString(sess.Get("username"))
+			return username, nil
+		},
 	}
 
 	app.Get("/ping", func(c *fiber.Ctx) error {
@@ -322,11 +331,10 @@ func (a *api) broadcastMessage(repo gh.Repository) {
 }
 
 func (a *api) loggedTime(c *fiber.Ctx) error {
-	sess, err := a.store.Get(c)
-	if err != nil || sess.Get("username") == nil || cast.ToString(sess.Get("username")) == "" {
-		return c.SendStatus(fiber.StatusForbidden)
+	username, err := a.getUsernameFromSession(c)
+	if err != nil {
+		return err
 	}
-	username := cast.ToString(sess.Get("username"))
 
 	a.mu.Lock()
 	if ts, ok := a.loggedCache.Get(username); ok && time.Now().Before(ts.Add(10*time.Second)) {
