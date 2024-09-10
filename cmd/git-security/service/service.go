@@ -89,6 +89,7 @@ func (app *GitSecurityApp) Run() (interruptible.Stop, error) {
 				app.opts.Postgres.PostgresPort,
 				app.opts.Postgres.PostgresDBName,
 			),
+			Logger: slog.New(slog.NewJSONHandler(os.Stdout, nil)),
 		})
 		if err != nil {
 			cancel()

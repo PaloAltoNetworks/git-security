@@ -12,8 +12,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/IGLOU-EU/go-wildcard/v2"
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
 	"github.com/kballard/go-shellquote"
 	"github.com/spf13/cast"
@@ -199,7 +199,7 @@ func (app *GitSecurityApp) runCustom() error {
 	return nil
 }
 
-func (app *GitSecurityApp) runSingleCustom(image, command string, envs []config.EnvKeyValue) (string, error) {
+func (app *GitSecurityApp) runSingleCustom(imageName, command string, envs []config.EnvKeyValue) (string, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		slog.Error("error in NewClientWithOpts()", slog.String("error", err.Error()))
@@ -228,12 +228,12 @@ func (app *GitSecurityApp) runSingleCustom(image, command string, envs []config.
 	}
 
 	slog.Debug("custom: create container",
-		slog.String("image", image),
+		slog.String("image", imageName),
 		slog.Any("Cmd", c),
 		slog.Any("Env", masked),
 	)
 	resp, err := cli.ContainerCreate(app.ctx, &container.Config{
-		Image: image,
+		Image: imageName,
 		Cmd:   c,
 		Tty:   true,
 		Env:   e,
@@ -241,8 +241,8 @@ func (app *GitSecurityApp) runSingleCustom(image, command string, envs []config.
 	if err != nil {
 		if strings.Contains(err.Error(), "No such image") {
 			// pull the image
-			slog.Debug("custom: pull image", slog.String("image", image))
-			reader, err := cli.ImagePull(app.ctx, image, types.ImagePullOptions{})
+			slog.Debug("custom: pull image", slog.String("image", imageName))
+			reader, err := cli.ImagePull(app.ctx, imageName, image.PullOptions{})
 			if err != nil {
 				slog.Error("error in ImagePull()", slog.String("error", err.Error()))
 				return "", err
@@ -251,7 +251,7 @@ func (app *GitSecurityApp) runSingleCustom(image, command string, envs []config.
 			io.Copy(io.Discard, reader)
 
 			resp, err = cli.ContainerCreate(app.ctx, &container.Config{
-				Image: image,
+				Image: imageName,
 				Cmd:   c,
 				Tty:   true,
 				Env:   e,

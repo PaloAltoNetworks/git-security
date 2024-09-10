@@ -11,7 +11,11 @@ func (a *api) GetUsers(c *fiber.Ctx) error {
 		Roles []string `json:"roles"`
 	}
 	dedup := treemap.NewWithStringComparator()
-	for _, entry := range a.enforcer.GetGroupingPolicy() {
+	entries, err := a.enforcer.GetGroupingPolicy()
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
 		username := entry[0]
 		role := entry[1]
 		if userRoles, ok := dedup.Get(username); ok {
