@@ -216,6 +216,28 @@ func (app *GitSecurityApp) Run() (interruptible.Stop, error) {
 		}
 	}()
 
+	// run automation logics
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		if err := app.runAutomation(); err != nil {
+			slog.Error("error in app.runAutomation()", slog.String("error", err.Error()))
+		}
+
+	loop:
+		for {
+			select {
+			case <-app.ctx.Done():
+				break loop
+			case <-time.After(5 * time.Minute):
+				if err := app.runAutomation(); err != nil {
+					slog.Error("error in app.runAutomation()", slog.String("error", err.Error()))
+				}
+			}
+		}
+	}()
+
 	wg.Add(1)
 	go func() {
 		defer wg.Done()

@@ -223,9 +223,11 @@ func NewFiberApp(
 	// logged time for activity
 	v1.Use(a.loggedTime)
 
+	v1.Delete("/automation/:id", a.DeleteAutomation)
 	v1.Delete("/column/:id", a.DeleteColumn)
 	v1.Delete("/custom/:id", a.DeleteCustom)
 	v1.Delete("/owner/:id", a.DeleteOwner)
+	v1.Get("/automations", a.GetAutomations)
 	v1.Get("/columns", a.GetColumns)
 	v1.Get("/customs", a.GetCustoms)
 	v1.Get("/globalsettings", a.GetGlobalSettings)
@@ -234,6 +236,7 @@ func NewFiberApp(
 	v1.Get("/roles", a.GetRoles)
 	v1.Get("/users", a.GetUsers)
 	v1.Get("/userview", a.GetUserView)
+	v1.Post("/automations", a.CreateAutomation)
 	v1.Post("/changelog", a.GetChangelog)
 	v1.Post("/changelog/:groupBy", a.GetChangelogGroupBy)
 	v1.Post("/columns", a.CreateColumn)
@@ -258,6 +261,7 @@ func NewFiberApp(
 	v1.Post("/repos/action/requires-strict-status-checks", a.RequiresStrictStatusChecks)
 	v1.Post("/repos/action/repo-owner", a.AddRepoOwner)
 	v1.Post("/repos/action/requires-pr", a.RequiresPR)
+	v1.Put("/automation/:id", a.UpdateAutomation)
 	v1.Put("/column/:id", a.UpdateColumn)
 	v1.Put("/custom/:id", a.UpdateCustom)
 	v1.Put("/globalsettings", a.UpdateGlobalSettings)

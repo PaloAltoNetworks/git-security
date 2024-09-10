@@ -24,6 +24,10 @@ const select = (index: string) => {
             <UIcon name="i-fa6-solid-terminal" class="menu-icon" />
             <span>Custom Hooks</span>
           </el-menu-item>
+          <el-menu-item index="/settings/automations">
+            <UIcon name="i-fa6-solid-terminal" class="menu-icon" />
+            <span>Automations</span>
+          </el-menu-item>
           <el-menu-item index="/settings/score">
             <UIcon name="i-fa6-solid-calculator" class="menu-icon" />
             <span>Repository Score</span>
