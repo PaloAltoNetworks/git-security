@@ -479,6 +479,15 @@ func (app *GitSecurityApp) createDefaultColumns() error {
 			Show:        false,
 			Filter:      false,
 		},
+		{
+			Type:        "integer",
+			Title:       "Automations Count",
+			Description: "",
+			Key:         "automations_count",
+			Width:       150,
+			Show:        false,
+			Filter:      false,
+		},
 	}
 
 	var col config.Column
@@ -546,11 +555,35 @@ func (app *GitSecurityApp) fetch() error {
 			}
 		}
 
+		// get automations
+		cursorAutomation, err := app.db.Collection("automations").Find(app.ctx, bson.D{})
+		if err != nil {
+			return err
+		}
+		var automations []config.Automation
+		if err := cursorAutomation.All(app.ctx, &automations); err != nil {
+			cursorAutomation.Close(app.ctx)
+			return err
+		}
+		cursorAutomation.Close(app.ctx)
+
 		for _, repo := range repos {
 			// update score and color
 			if err := repo.UpdateRepoScoreAndColor(&gs); err != nil {
 				continue
 			}
+
+			// update the automation count
+			automationsCount := 0
+			for _, automation := range automations {
+				if proceedWithRightCondition(repo, automation) &&
+					automation.Enabled &&
+					len(automation.Image) > 0 &&
+					len(automation.Command) > 0 {
+					automationsCount += 1
+				}
+			}
+			repo.AutomationsCount = automationsCount
 
 			update := bson.D{{Key: "$set", Value: *repo}}
 			if _, err := app.dbw.UpdateRepository(repo.ID, update, true); err != nil {

@@ -30,6 +30,7 @@ type Repository struct {
 	RepoOwnerID      primitive.ObjectID     `bson:"repo_owner_id,omitempty" json:"repo_owner_id,omitempty"`
 	RepoOwner        string                 `bson:"repo_owner,omitempty" json:"repo_owner,omitempty"`
 	RepoOwnerContact string                 `bson:"repo_owner_contact,omitempty" json:"repo_owner_contact,omitempty"`
+	AutomationsCount int                    `bson:"automations_count,omitempty" json:"automations_count"`
 }
 
 type GqlRepository struct {
