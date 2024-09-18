@@ -3,151 +3,219 @@
 import json
 import os
 import requests
+import sys
+import urllib3
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+def get_boolean_env_var(name):
+    v = os.environ.get(name)
+    if v is None:
+        return None
+    v = v.lower()
+    return any(v == ans for ans in ["true", "t", "yes", "y", "1"])
+
+
+def get_list_env_var(name):
+    v = os.environ.get(name)
+    if v is None:
+        return None
+    return v.split(",")
+
+
+def is_bpr_option_equal(bpr, key, from_env, tranformation=None):
+    if from_env is None:
+        return True  # we don't need to compare since we are not changing it
+    if tranformation is not None:
+        from_env = tranformation(from_env)
+    if key in bpr and bpr[key] == from_env:
+        return True
+    print("%s diffs %s <> %s" % (key, bpr.get(key), from_env))
+
+
+def is_repo_list_equal(repo, key, from_env):
+    if from_env is None:
+        return True  # we don't need to compare since we are not changing it
+    if key in repo and len(repo[key]) == len(from_env):
+        for e in repo[key]:
+            if e not in from_env:
+                print("%s diffs %s <> %s" % (key, repo.get(key), from_env))
+                return False
+        return True
+    print("%s diffs %s <> %s" % (key, repo.get(key), from_env))
+
 
 GITHUB_HOST = os.environ["GITHUB_HOST"]
 GH_TOKEN = os.environ["GH_TOKEN"]
 GIT_REPO_JSON = os.environ["GIT_REPO_JSON"]
 repo = json.loads(GIT_REPO_JSON)
 
-GITHUB_BRANCH_PROTECTION_RULE = (
-    os.environ.get("GITHUB_BRANCH_PROTECTION_RULE", "true").lower() == "true"
+GITHUB_BRANCH_PROTECTION_RULE = get_boolean_env_var("GITHUB_BRANCH_PROTECTION_RULE")
+GITHUB_BPR_REQUIRED_PR = get_boolean_env_var("GITHUB_BPR_REQUIRED_PR")
+GITHUB_BPR_APPROVING_REVIEW_COUNT = os.environ.get("GITHUB_BPR_APPROVING_REVIEW_COUNT")
+GITHUB_BPR_DISMISS_STALE_REVIEWS = get_boolean_env_var(
+    "GITHUB_BPR_DISMISS_STALE_REVIEWS"
 )
-GITHUB_BPR_REQUIRED_PR = (
-    os.environ.get("GITHUB_BPR_REQUIRED_PR", "false").lower() == "true"
+GITHUB_BPR_REQUIRED_STATUS_CHECKS = get_boolean_env_var(
+    "GITHUB_BPR_REQUIRED_STATUS_CHECKS"
 )
-GITHUB_BPR_APPROVING_REVIEW_COUNT = os.environ.get(
-    "GITHUB_BPR_APPROVING_REVIEW_COUNT", 0
+GITHUB_BPR_ENFORCE_ADMINS = get_boolean_env_var("GITHUB_BPR_ENFORCE_ADMINS")
+GITHUB_BPR_CONVERSATION_RESOLUTION = get_boolean_env_var(
+    "GITHUB_BPR_CONVERSATION_RESOLUTION"
 )
-GITHUB_BPR_DISMISS_STALE_REVIEWS = (
-    os.environ.get("GITHUB_BPR_DISMISS_STALE_REVIEWS", "false").lower() == "true"
-)
-GITHUB_BPR_REQUIRED_STATUS_CHECKS = (
-    os.environ.get("GITHUB_BPR_REQUIRED_STATUS_CHECKS", "false").lower() == "true"
-)
-GITHUB_BPR_ENFORCE_ADMINS = (
-    os.environ.get("GITHUB_BPR_ENFORCE_ADMINS", "false").lower() == "true"
-)
-GITHUB_BPR_CONVERSATION_RESOLUTION = (
-    os.environ.get("GITHUB_BPR_CONVERSATION_RESOLUTION", "false").lower() == "true"
-)
-GITHUB_BPR_ALLOW_FORCE_PUSHES = (
-    os.environ.get("GITHUB_BPR_ALLOW_FORCE_PUSHES", "false").lower() == "true"
-)
-GITHUB_BPR_ALLOW_DELETIONS = (
-    os.environ.get("GITHUB_BPR_ALLOW_DELETIONS", "false").lower() == "true"
-)
-GITHUB_BPR_REQUIRED_SIGNED_COMMITS = (
-    os.environ.get("GITHUB_BPR_REQUIRED_SIGNED_COMMITS", "false").lower() == "true"
-)
+GITHUB_BPR_ALLOW_FORCE_PUSHES = get_boolean_env_var("GITHUB_BPR_ALLOW_FORCE_PUSHES")
+GITHUB_BPR_ALLOW_DELETIONS = get_boolean_env_var("GITHUB_BPR_ALLOW_DELETIONS")
+GITHUB_BPR_BYPASS_PR_USERS = get_list_env_var("GITHUB_BPR_BYPASS_PR_USERS")
 
-url = "https://%s/api/v3/repos/%s/branches/%s/protection" % (
-    GITHUB_HOST,
-    repo["full_name"],
-    repo["default_branch"]["name"],
-)
-headers = {
-    "Authorization": f"Bearer {GH_TOKEN}",
-    "Accept": "application/vnd.github+json",
-    "X-GitHub-Api-Version": "2022-11-28",
+# check what we need to do
+# if GITHUB_BRANCH_PROTECTION_RULE is true / none
+#   rule doesn't exist and GITHUB_BRANCH_PROTECTION_RULE is true => create one with the options
+#   rule exists => check each option with the existing values => update if needed
+# if GITHUB_BRANCH_PROTECTION_RULE is false
+#   rule exists => delete the rule with graphql
+
+bpr = repo["default_branch"]["branch_protection_rule"]
+
+m = """
+mutation deleteBranchProtectionRule($ruleId: ID!) {
+    deleteBranchProtectionRule(input: {
+        branchProtectionRuleId: $ruleId,
+    }) {
+        clientMutationId
+    }
+}
+"""
+variables = {
+    "repoId": repo["id"],
+    "pattern": repo["default_branch"]["name"],
+    "ruleId": bpr["id"],
+    "requiresApprovingReviews": GITHUB_BPR_REQUIRED_PR,
+    "requiredApprovingReviewCount": (
+        None
+        if GITHUB_BPR_APPROVING_REVIEW_COUNT is None
+        else int(GITHUB_BPR_APPROVING_REVIEW_COUNT)
+    ),
+    "dismissesStaleReviews": GITHUB_BPR_DISMISS_STALE_REVIEWS,
+    "requiresStatusChecks": GITHUB_BPR_REQUIRED_STATUS_CHECKS,
+    "isAdminEnforced": GITHUB_BPR_ENFORCE_ADMINS,
+    "requiresConversationResolution": GITHUB_BPR_CONVERSATION_RESOLUTION,
+    "allowsForcePushes": GITHUB_BPR_ALLOW_FORCE_PUSHES,
+    "allowsDeletions": GITHUB_BPR_ALLOW_DELETIONS,
+    "bypassPullRequestActorIds": GITHUB_BPR_BYPASS_PR_USERS,
 }
 
-if GITHUB_BRANCH_PROTECTION_RULE:
-    data = {
-        "restrictions": None,
-    }
-
-    if GITHUB_BPR_REQUIRED_PR:
-        data["required_pull_request_reviews"] = {
-            "required_approving_review_count": int(GITHUB_BPR_APPROVING_REVIEW_COUNT),
-            "dismiss_stale_reviews": GITHUB_BPR_DISMISS_STALE_REVIEWS,
+if GITHUB_BRANCH_PROTECTION_RULE is None or GITHUB_BRANCH_PROTECTION_RULE:
+    if bpr["id"] == "" and GITHUB_BRANCH_PROTECTION_RULE:
+        # create case
+        m = """
+mutation createBranchProtectionRule(
+    $repoId: ID!
+    $pattern: String!
+    $requiresApprovingReviews: Boolean
+    $requiredApprovingReviewCount: Int
+    $dismissesStaleReviews: Boolean
+    $requiresStatusChecks: Boolean
+    $isAdminEnforced: Boolean
+    $requiresConversationResolution: Boolean
+    $allowsForcePushes: Boolean
+    $allowsDeletions: Boolean
+    $bypassPullRequestActorIds: [ID!]
+) {
+    createBranchProtectionRule(input: {
+        repositoryId: $repoId
+        pattern: $pattern
+        requiresApprovingReviews: $requiresApprovingReviews
+        requiredApprovingReviewCount: $requiredApprovingReviewCount
+        dismissesStaleReviews: $dismissesStaleReviews
+        requiresStatusChecks: $requiresStatusChecks
+        isAdminEnforced: $isAdminEnforced
+        requiresConversationResolution: $requiresConversationResolution
+        allowsForcePushes: $allowsForcePushes
+        allowsDeletions: $allowsDeletions
+        bypassPullRequestActorIds: $bypassPullRequestActorIds
+    }) {
+        branchProtectionRule {
+            id
         }
-    else:
-        data["required_pull_request_reviews"] = None
-    if GITHUB_BPR_REQUIRED_STATUS_CHECKS:
-        data["required_status_checks"] = {"strict": True, "contexts": []}
-    else:
-        data["required_status_checks"] = None
-    data["enforce_admins"] = GITHUB_BPR_ENFORCE_ADMINS
-    data["required_conversation_resolution"] = GITHUB_BPR_CONVERSATION_RESOLUTION
-    data["allow_force_pushes"] = GITHUB_BPR_ALLOW_FORCE_PUSHES
-    data["allow_deletions"] = GITHUB_BPR_ALLOW_DELETIONS
+    }
+}
+"""
+    elif bpr["id"] != "":
+        # update case
 
-    proceed = False
-    bpr = repo["default_branch"]["branch_protection_rule"]
-    if bpr["id"] == "":
-        proceed = True
-    else:
-        # already existed
-        bpr_required_status_checks = bpr["required_status_checks"] is not None
-        if bpr["allows_force_pushes"] != GITHUB_BPR_ALLOW_FORCE_PUSHES:
-            print("allows_force_pushes diffs")
-            proceed = True
-        elif bpr["allows_deletion"] != GITHUB_BPR_ALLOW_DELETIONS:
-            print("allows_deletion diffs")
-            proceed = True
-        elif (
-            bpr["requires_conversation_resolution"]
-            != GITHUB_BPR_CONVERSATION_RESOLUTION
-        ):
-            print("requires_conversation_resolution diffs")
-            proceed = True
-        elif bpr["is_admin_enforced"] != GITHUB_BPR_ENFORCE_ADMINS:
-            print("is_admin_enforced diffs")
-            proceed = True
-        elif bpr_required_status_checks != GITHUB_BPR_REQUIRED_STATUS_CHECKS:
-            print("bpr_required_status_checks diffs")
-            proceed = True
-        elif (
-            bpr["required_approving_review_count"] != GITHUB_BPR_APPROVING_REVIEW_COUNT
-        ):
-            print("required_approving_review_count diffs")
-            proceed = True
-        elif bpr["dismisses_stale_reviews"] != GITHUB_BPR_DISMISS_STALE_REVIEWS:
-            print("dismisses_stale_reviews diffs")
-            proceed = True
-
-    # Make the API request
-    if proceed:
-        print("creating/updating branch protection rule")
-        response = requests.put(
-            url, headers=headers, data=json.dumps(data), verify=False
-        )
-
-        # Check response
-        if response.status_code == 200:
-            print("Branch protection rule added successfully!")
-        else:
-            print(f"Failed to add branch protection rule: {response.status_code}")
-            print(response.json())
-elif (
-    not GITHUB_BRANCH_PROTECTION_RULE
-    and repo["default_branch"]["branch_protection_rule"]["id"] != ""
-):
-    response = requests.delete(url, headers=headers, verify=False)
-    if response.status_code == 204:
-        print("Branch protection rule deleted successfully!")
-    else:
-        print(f"Failed to delete branch protection rule: {response.status_code}")
-        print(response.json())
-
-# required_signatures
-if bpr["requires_commit_signatures"] != GITHUB_BPR_REQUIRED_SIGNED_COMMITS:
-    url = f"{url}/required_signatures"
-    if GITHUB_BPR_REQUIRED_SIGNED_COMMITS:
-        response = requests.post(url, headers=headers, verify=False)
-        if response.status_code == 201:
-            print("Signed commits requirement enabled successfully!")
-        else:
-            print(
-                f"Failed to enable signed commits requirement: {response.status_code}"
+        # check diff first
+        if (
+            is_bpr_option_equal(
+                bpr, "requires_approving_reviews", GITHUB_BPR_REQUIRED_PR
             )
-            print(response.json())
-    else:
-        response = requests.delete(url, headers=headers)
-        if response.status_code == 204:
-            print("Signed commits requirement disabled successfully!")
-        else:
-            print(
-                f"Failed to disable signed commits requirement: {response.status_code}"
+            and is_bpr_option_equal(
+                bpr, "dismisses_stale_reviews", GITHUB_BPR_DISMISS_STALE_REVIEWS
             )
-            print(response.json())
+            and is_bpr_option_equal(
+                bpr, "requires_status_checks", GITHUB_BPR_REQUIRED_STATUS_CHECKS
+            )
+            and is_bpr_option_equal(bpr, "is_admin_enforced", GITHUB_BPR_ENFORCE_ADMINS)
+            and is_bpr_option_equal(
+                bpr,
+                "requires_conversation_resolution",
+                GITHUB_BPR_CONVERSATION_RESOLUTION,
+            )
+            and is_bpr_option_equal(
+                bpr, "allows_force_pushes", GITHUB_BPR_ALLOW_FORCE_PUSHES
+            )
+            and is_bpr_option_equal(bpr, "allows_deletion", GITHUB_BPR_ALLOW_DELETIONS)
+            and is_bpr_option_equal(
+                bpr,
+                "required_approving_review_count",
+                GITHUB_BPR_APPROVING_REVIEW_COUNT,
+                lambda x: int(x),
+            )
+            and is_repo_list_equal(
+                repo, "bypass_pull_request_user_ids", GITHUB_BPR_BYPASS_PR_USERS
+            )
+        ):
+            sys.exit(0)
+        m = """
+mutation UpdateBranchProtectionRule(
+    $ruleId: ID!
+    $requiresApprovingReviews: Boolean
+    $requiredApprovingReviewCount: Int
+    $dismissesStaleReviews: Boolean
+    $requiresStatusChecks: Boolean
+    $isAdminEnforced: Boolean
+    $requiresConversationResolution: Boolean
+    $allowsForcePushes: Boolean
+    $allowsDeletions: Boolean
+    $bypassPullRequestActorIds: [ID!]
+) {
+    updateBranchProtectionRule(input: {
+        branchProtectionRuleId: $ruleId
+        requiresApprovingReviews: $requiresApprovingReviews
+        requiredApprovingReviewCount: $requiredApprovingReviewCount
+        dismissesStaleReviews: $dismissesStaleReviews
+        requiresStatusChecks: $requiresStatusChecks
+        isAdminEnforced: $isAdminEnforced
+        requiresConversationResolution: $requiresConversationResolution
+        allowsForcePushes: $allowsForcePushes
+        allowsDeletions: $allowsDeletions
+        bypassPullRequestActorIds: $bypassPullRequestActorIds
+    }) {
+        branchProtectionRule {
+            id
+        }
+    }
+}
+"""
+    else:
+        sys.exit(0)
+
+url = "https://%s/api/graphql" % (GITHUB_HOST,)
+headers = {"Authorization": f"Bearer {GH_TOKEN}", "Content-Type": "application/json"}
+response = requests.post(
+    url,
+    headers=headers,
+    json={"query": m, "variables": variables},
+    verify=False,
+)
+print(response.text)

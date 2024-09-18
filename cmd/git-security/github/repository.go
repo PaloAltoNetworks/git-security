@@ -3,6 +3,7 @@ package gh
 import (
 	"encoding/json"
 	"log/slog"
+	"sort"
 	"time"
 
 	"github.com/PaloAltoNetworks/git-security/cmd/git-security/config"
@@ -19,18 +20,22 @@ var (
 )
 
 type Repository struct {
-	*GqlRepository   `bson:"inline"`
-	Customs          map[string]interface{} `bson:"customs,omitempty" json:"customs,omitempty" diff:"Customs"`
-	GitHubHost       string                 `bson:"github_host,omitempty" json:"github_host,omitempty"`
-	Score            *int                   `bson:"score,omitempty" json:"score,omitempty"`
-	ScoreColor       *string                `bson:"score_color,omitempty" json:"score_color,omitempty"`
-	FetchedAt        time.Time              `bson:"fetched_at,omitempty" json:"fetched_at,omitempty"`
-	CustomRunAt      time.Time              `bson:"custom_run_at,omitempty" json:"custom_run_at,omitempty"`
-	LastCommittedAt  time.Time              `bson:"last_committed_at" json:"last_committed_at"`
-	RepoOwnerID      primitive.ObjectID     `bson:"repo_owner_id,omitempty" json:"repo_owner_id,omitempty"`
-	RepoOwner        string                 `bson:"repo_owner,omitempty" json:"repo_owner,omitempty"`
-	RepoOwnerContact string                 `bson:"repo_owner_contact,omitempty" json:"repo_owner_contact,omitempty"`
-	AutomationsCount int                    `bson:"automations_count,omitempty" json:"automations_count"`
+	*GqlRepository           `bson:"inline"`
+	Customs                  map[string]interface{} `bson:"customs,omitempty" json:"customs,omitempty" diff:"Customs"`
+	GitHubHost               string                 `bson:"github_host,omitempty" json:"github_host,omitempty"`
+	Score                    *int                   `bson:"score,omitempty" json:"score,omitempty"`
+	ScoreColor               *string                `bson:"score_color,omitempty" json:"score_color,omitempty"`
+	FetchedAt                time.Time              `bson:"fetched_at,omitempty" json:"fetched_at,omitempty"`
+	CustomRunAt              time.Time              `bson:"custom_run_at,omitempty" json:"custom_run_at,omitempty"`
+	LastCommittedAt          time.Time              `bson:"last_committed_at" json:"last_committed_at"`
+	RepoOwnerID              primitive.ObjectID     `bson:"repo_owner_id,omitempty" json:"repo_owner_id,omitempty"`
+	RepoOwner                string                 `bson:"repo_owner,omitempty" json:"repo_owner,omitempty"`
+	RepoOwnerContact         string                 `bson:"repo_owner_contact,omitempty" json:"repo_owner_contact,omitempty"`
+	AutomationsCount         int                    `bson:"automations_count,omitempty" json:"automations_count"`
+	BypassPullRequestUsers   []string               `bson:"bypass_pull_request_users,omitempty" json:"bypass_pull_request_users,omitempty"`
+	BypassPullRequestUserIDs []string               `bson:"bypass_pull_request_user_ids,omitempty" json:"bypass_pull_request_user_ids,omitempty"`
+	PushAllowanceUsers       []string               `bson:"push_allowance_users,omitempty" json:"push_allowance_users,omitempty"`
+	PushAllowanceUserIDs     []string               `bson:"push_allowance_user_ids,omitempty" json:"push_allowance_user_ids,omitempty"`
 }
 
 type GqlRepository struct {
@@ -73,14 +78,16 @@ type PullRequests struct {
 }
 
 type BranchProtectionRule struct {
-	ID                           string `bson:"id" json:"id" diff:"BranchProtectionRuleID"`
-	Pattern                      string `bson:"pattern" json:"pattern"`
-	AllowsForcePushes            bool   `bson:"allows_force_pushes" json:"allows_force_pushes"`
-	AllowsDeletions              bool   `bson:"allows_deletion" json:"allows_deletion"`
-	DismissesStaleReviews        bool   `bson:"dismisses_stale_reviews" json:"dismisses_stale_reviews"`
-	IsAdminEnforced              bool   `bson:"is_admin_enforced" json:"is_admin_enforced"`
-	RequireLastPushApproval      bool   `bson:"require_last_push_approval" json:"require_last_push_approval"`
-	RequiredApprovingReviewCount int    `bson:"required_approving_review_count" json:"required_approving_review_count"`
+	ID                           string                      `bson:"id" json:"id" diff:"BranchProtectionRuleID"`
+	Pattern                      string                      `bson:"pattern" json:"pattern"`
+	AllowsForcePushes            bool                        `bson:"allows_force_pushes" json:"allows_force_pushes"`
+	AllowsDeletions              bool                        `bson:"allows_deletion" json:"allows_deletion"`
+	BypassPullRequestAllowances  BypassPullRequestAllowances `bson:"-" json:"bypass_pull_request_allowances" graphql:"bypassPullRequestAllowances(first: 100)"`
+	DismissesStaleReviews        bool                        `bson:"dismisses_stale_reviews" json:"dismisses_stale_reviews"`
+	IsAdminEnforced              bool                        `bson:"is_admin_enforced" json:"is_admin_enforced"`
+	PushAllowances               PushAllowances              `bson:"-" json:"push_allowances" graphql:"pushAllowances(first: 100)"`
+	RequireLastPushApproval      bool                        `bson:"require_last_push_approval" json:"require_last_push_approval"`
+	RequiredApprovingReviewCount int                         `bson:"required_approving_review_count" json:"required_approving_review_count"`
 	RequiredStatusChecks         []struct {
 		Context string `bson:"context" json:"context"`
 	} `bson:"required_status_checks" json:"required_status_checks"`
@@ -93,6 +100,37 @@ type BranchProtectionRule struct {
 	RequiresStrictStatusChecks     bool `bson:"requires_strict_status_checks" json:"requires_strict_status_checks"`
 	RestrictsPushes                bool `bson:"retricts_pushes" json:"retricts_pushes"`
 	RestrictsReviewDismissals      bool `bson:"retricts_review_dismissals" json:"retricts_review_dismissals"`
+}
+
+type BypassPullRequestAllowances struct {
+	Nodes []BypassPullRequestAllowance
+}
+
+type PushAllowances struct {
+	Nodes []PushAllowance
+}
+
+type BypassPullRequestAllowance struct {
+	Actor Actor `bson:"actor" json:"actor"`
+}
+
+type PushAllowance struct {
+	Actor Actor `bson:"actor" json:"actor"`
+}
+
+type Actor struct {
+	User User `graphql:"... on User"`
+	Team Team `graphql:"... on Team"`
+}
+
+type User struct {
+	ID    string `bson:"id" json:"id"`
+	Login string `bson:"login" json:"login"`
+}
+
+type Team struct {
+	ID   string `bson:"id" json:"id"`
+	Name string `bson:"name" json:"name"`
 }
 
 type Target struct {
@@ -159,6 +197,25 @@ func (ghi *GitHubImpl) GetRepos(orgName string) ([]*Repository, error) {
 		for _, node := range q.Organization.Repositories.Nodes {
 			r := ghi.NewRepository(node)
 			r.FetchedAt = time.Now()
+
+			// sync BypassPullRequestUsers and PushAllowanceUsers
+			r.BypassPullRequestUsers = []string{}
+			r.BypassPullRequestUserIDs = []string{}
+			r.PushAllowanceUsers = []string{}
+			r.PushAllowanceUserIDs = []string{}
+			if r.DefaultBranchRef.BranchProtectionRule.Pattern != "" {
+				for _, n := range r.DefaultBranchRef.BranchProtectionRule.BypassPullRequestAllowances.Nodes {
+					r.BypassPullRequestUsers = append(r.BypassPullRequestUsers, n.Actor.User.Login)
+					r.BypassPullRequestUserIDs = append(r.BypassPullRequestUserIDs, n.Actor.User.ID)
+				}
+				sort.Strings(r.BypassPullRequestUsers)
+				for _, n := range r.DefaultBranchRef.BranchProtectionRule.PushAllowances.Nodes {
+					r.PushAllowanceUsers = append(r.PushAllowanceUsers, n.Actor.User.Login)
+					r.PushAllowanceUserIDs = append(r.PushAllowanceUserIDs, n.Actor.User.ID)
+				}
+				sort.Strings(r.PushAllowanceUsers)
+			}
+
 			repos = append(repos, r)
 		}
 		if !q.Organization.Repositories.PageInfo.HasNextPage {
