@@ -109,15 +109,18 @@ For backend database, MongoDB is recommended. PostgreSQL and Sqlite are supporte
 
 ## Pre-Receive Hook Enforcement
 
-Using this automation the pre-receive hooks of a github repository can be enabled or disabled by specifying the value in the environmental variables
+Using this automation the pre-receive hooks of a github repository can be enabled or disabled.
+
+The following environment variables must be set to enforce the automation:
 
 ```
-ENVIRONMENT VARIABLES:
-   GITHUB_HOST                     Github Host
-   GH_TOKEN                        Github PAT
-   GIT_PRE_RECEIVE_HOOKS_ENABLE    Pre-receive hooks to be enabled
-   GIT_PRE_RECEIVE_HOOKS_DISABLE   Pre-receive hooks to be disabled
+GITHUB_HOST                     Github Host
+GH_TOKEN                        Github PAT
+GIT_PRE_RECEIVE_HOOKS_ENABLE    Pre-receive hooks to be enabled
+GIT_PRE_RECEIVE_HOOKS_DISABLE   Pre-receive hooks to be disabled
 ```
+
+The user can specify the hooks to enable or disable or both
 
 ## License
 
