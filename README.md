@@ -1,5 +1,7 @@
 # git-security
+
 ## Project description
+
 git-security is an application that displays many git repositories information in a table view with ecommerce-like filters. It also supports changing different branch protection rule options in bulk. In order to pull in more information from other services, you can also configure custom hooks using docker images to enrich the data besides GitHub.
 
 Architecture diagram:
@@ -29,11 +31,15 @@ docker run -d -e "GH_TOKEN=$GH_TOKEN" -e "GITHUB_HOST=$GITHUB_HOST" -p 8080:8080
 ## How to develop
 
 Pre-requisite: Go 1.22+, npm
+
 1. Run go backend server
+
 ```sh
 go run github.com/PaloAltoNetworks/git-security/cmd/git-security
 ```
+
 2. Run UI
+
 ```sh
 cd cmd/git-security/ui
 npm install
@@ -43,15 +49,19 @@ npm run dev -- --open
 ## How to build the image
 
 Pre-requisite: Docker
+
 ```sh
 make image
 ```
+
 or if you want to deploy to k8s with amd64 arch
+
 ```sh
 make image-amd64
 ```
 
 # App options
+
 ```
 COMMANDS:
    generate-key  generate a random encryption key for GIT_SECURITY_KEY
@@ -84,6 +94,7 @@ GLOBAL OPTIONS:
 ```
 
 In order to encrypt the custom logic envs provided by the users, we need to configure --key option, use generate-key command to randomly create one if not existed
+
 ```sh
 go run github.com/PaloAltoNetworks/git-security/cmd/git-security generate-key
 ```
@@ -93,6 +104,20 @@ For backend database, MongoDB is recommended. PostgreSQL and Sqlite are supporte
 # Columns configuration
 
 # Custom hooks configuration
+
+# Automations
+
+## Pre-Receive Hook Enforcement
+
+Using this automation the pre-receive hooks of a github repository can be enabled or disabled by specifying the value in the environmental variables
+
+```
+ENVIRONMENT VARIABLES:
+   GITHUB_HOST                     Github Host
+   GH_TOKEN                        Github PAT
+   GIT_PRE_RECEIVE_HOOKS_ENABLE    Pre-receive hooks to be enabled
+   GIT_PRE_RECEIVE_HOOKS_DISABLE   Pre-receive hooks to be disabled
+```
 
 ## License
 
