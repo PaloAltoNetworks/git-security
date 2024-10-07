@@ -22,6 +22,7 @@ import {
   showNotification,
   actionsConfirmationDialog,
 } from "@/common-functions";
+import type { CellRendererParams } from "element-plus/es/components/table-v2/src/types.mjs";
 
 type ColumnType =
   | "string"
@@ -42,6 +43,7 @@ type ColumnConfig = {
   filter_expanded?: boolean;
   csv: boolean;
   order: string;
+  group_by: string;
 };
 
 const loading = ref(false);
@@ -97,10 +99,147 @@ const fetchRepos = () => {
       repos_table_search.text = "";
       repos_table.selected.clear();
       lastCheckboxCheckedIndex = -1;
+
+      // groupBy logic
+      groupBy_table.data = [];
+      groupBy_table.dataMap.clear();
+      for (let i = 0; i < response._data.length; i++) {
+        let row = response._data[i];
+        let groupByValue = String(row["owner"]["login"]);
+        if (groupBy.value == "Owner") {
+          groupByValue = String(row["repo_owner"]);
+        }
+
+        let m = groupBy_table.dataMap.get(groupByValue);
+        if (!m) {
+          m = new Map<string, any>();
+          groupBy_table.dataMap.set(groupByValue, m);
+        }
+
+        // increment the _count field
+        m.set("_count", (m.get("_count") ?? 0) + 1);
+
+        // look at the uiData.selectedColumns and do different calculation
+        for (let id of uiData.selectedColumns) {
+          let cc = uiData.allCCsMap[id];
+          let currentValue = dotGet(row, cc.key);
+          if (cc.group_by == "sum" || cc.group_by == "avg") {
+            if (typeof currentValue === "number") {
+              m.set(cc.key, (m.get(cc.key) ?? 0) + currentValue);
+            }
+          } else if (cc.group_by.startsWith("distinct_count_")) {
+            let distinctCountMap = m.get(cc.key) as Map<string, number>;
+            if (!distinctCountMap) {
+              distinctCountMap = new Map<string, number>();
+              m.set(cc.key, distinctCountMap);
+            }
+            // check if row[cc.key] is an array
+            if (Array.isArray(currentValue)) {
+              for (let item of currentValue) {
+                let key = String(item);
+                // increment the count of the item in the distinctCountMap
+                distinctCountMap.set(key, (distinctCountMap.get(key) ?? 0) + 1);
+              }
+            } else {
+              let key = String(currentValue);
+              distinctCountMap.set(key, (distinctCountMap.get(key) ?? 0) + 1);
+            }
+          } else if (cc.group_by == "min") {
+            console.log(typeof currentValue);
+            if (typeof currentValue === "number") {
+              let minValue = m.get(cc.key) ?? Number.MAX_SAFE_INTEGER;
+              minValue = Math.min(minValue, currentValue);
+              m.set(cc.key, minValue);
+            } else if (typeof currentValue === "string") {
+              let minValue = m.get(cc.key) ?? "";
+              minValue =
+                String(currentValue).localeCompare(minValue) < 0 ||
+                minValue == ""
+                  ? currentValue
+                  : minValue;
+              m.set(cc.key, minValue);
+            } else if (typeof currentValue === "boolean") {
+              let minValue = m.get(cc.key) ?? true;
+              minValue = currentValue && minValue;
+              m.set(cc.key, minValue);
+            }
+          } else if (cc.group_by == "max") {
+            if (typeof currentValue === "number") {
+              let maxValue = m.get(cc.key) ?? Number.MIN_SAFE_INTEGER;
+              maxValue = Math.max(maxValue, currentValue);
+              m.set(cc.key, maxValue);
+            } else if (typeof currentValue === "string") {
+              let maxValue = m.get(cc.key) ?? "";
+              maxValue =
+                String(currentValue).localeCompare(maxValue) > 0 ||
+                maxValue == ""
+                  ? currentValue
+                  : maxValue;
+              m.set(cc.key, maxValue);
+            } else if (typeof currentValue === "boolean") {
+              let maxValue = m.get(cc.key) ?? false;
+              maxValue = currentValue || maxValue;
+              m.set(cc.key, maxValue);
+            }
+          }
+        }
+      }
+
+      // post processing to for each key on groupBy_table.dataMap in alphabetical order
+      for (let key of Array.from(groupBy_table.dataMap.keys()).sort()) {
+        let m = groupBy_table.dataMap.get(key);
+        if (m) {
+          let row: Record<string, any> = {
+            group_by: `${key} (${m.get("_count") ?? 0})`,
+          };
+          for (let id of uiData.selectedColumns) {
+            let cc = uiData.allCCsMap[id];
+            if (
+              cc.group_by == "sum" ||
+              cc.group_by == "min" ||
+              cc.group_by == "max"
+            ) {
+              row[cc.key] = m.get(cc.key) ?? 0;
+            } else if (cc.group_by == "avg") {
+              // need to limit the result to 2 decimal places
+              row[cc.key] = Number(
+                (m.get(cc.key) ?? 0) / (m.get("_count") ?? 0)
+              ).toFixed(2);
+            } else if (cc.group_by.startsWith("distinct_count_")) {
+              let distinctCountMap = m.get(cc.key) as Map<string, number>;
+              let sortedDistinctCountList = Array.from(
+                distinctCountMap.entries()
+              );
+              if (cc.group_by == "distinct_count_by_count") {
+                // sort the distinctCountMap based on the value in descending order
+                sortedDistinctCountList = sortedDistinctCountList.sort(
+                  (a, b) => b[1] - a[1]
+                );
+              } else if (cc.group_by == "distinct_count_by_name_desc") {
+                sortedDistinctCountList = sortedDistinctCountList.sort((a, b) =>
+                  b[0].localeCompare(a[0])
+                );
+              } else if (cc.group_by == "distinct_count_by_name_asc") {
+                sortedDistinctCountList = sortedDistinctCountList.sort((a, b) =>
+                  a[0].localeCompare(b[0])
+                );
+              }
+              // pick the top 5 key-value pair
+              sortedDistinctCountList = sortedDistinctCountList.slice(0, 5);
+
+              // consolidate the sortedDistinctCountList into a string with a format
+              // like "key1 (count1), key2 (count2) ..."
+              row[cc.key] = sortedDistinctCountList.map(
+                ([key, count]) => `${key} (${count})`
+              );
+            }
+          }
+          groupBy_table.data.push(row);
+        }
+      }
     },
   });
 };
-
 const refreshFilter = async () => {
   Object.keys(filters.value).forEach((key) => delete filters.value[key]);
   filtersOrder.value.splice(0);
@@ -132,7 +271,7 @@ const getDefaultColumns = (): Column<any>[] => [
   {
     key: "selection",
     width: 25,
-    cellRenderer: ({ rowData, rowIndex }) => {
+    cellRenderer: ({ rowData, rowIndex }: CellRendererParams<any>) => {
       const onChange = (value: CheckboxValueType) => {
         if (value) {
           repos_table.selected.set(rowData["id"], true);
@@ -284,7 +423,6 @@ const getDefaultColumns = (): Column<any>[] => [
     },
   },
 ];
-
 const refresh_repos_table_data = () => {
   if (repos_table_search.text != "") {
     repos_table.data = useFilter(repos_table.originalData, (row: any) => {
@@ -345,7 +483,6 @@ const repos_table_search = reactive({
 });
 
 const repos_table = reactive({
-  selectedDeviceID: null,
   rowKey: "id",
   columns: getDefaultColumns(),
   dataMap: new Map<string, number>(),
@@ -773,6 +910,7 @@ const fetchUserView = () => {
         }
 
         repos_table.columns = getDefaultColumns();
+        groupBy_table.columns = getDefaultGroupByColumns();
         for (const id of uv.columns) {
           if (id in uiData.allCCsMap) {
             let cc = uiData.allCCsMap[id];
@@ -789,13 +927,17 @@ const fetchUserView = () => {
               c["align"] = "center";
             }
 
-            const getContent = (rowData: any, cellData: any) => {
-              if (cc.type == "boolean") {
-                return h(Icon, {
-                  name: cellData ? "i-fa6-solid-check" : "i-fa6-solid-xmark",
-                  style: cellData ? "color: green" : "color: red",
-                });
-              } else if (cc.type == "array") {
+            const getContent = (rowData: any, cellData: any, t: string) => {
+              if (t == "boolean") {
+                return cellData != undefined
+                  ? h(Icon, {
+                      name: cellData
+                        ? "i-fa6-solid-check"
+                        : "i-fa6-solid-xmark",
+                      style: cellData ? "color: green" : "color: red",
+                    })
+                  : h("span", "");
+              } else if (t == "array") {
                 return cellData && Array.isArray(cellData)
                   ? h(
                       ElTooltip,
@@ -819,8 +961,9 @@ const fetchUserView = () => {
                         )
                     )
                   : "";
-              } else if (cc.type == "date") {
-                return cellData != "0001-01-01T00:00:00Z"
+              } else if (t == "date") {
+                return cellData != undefined &&
+                  cellData != "0001-01-01T00:00:00Z"
                   ? h(
                       "span",
                       {
@@ -829,7 +972,7 @@ const fetchUserView = () => {
                       useDayjs()(cellData).fromNow()
                     )
                   : h("span", "");
-              } else if (cc.type == "reposcore") {
+              } else if (t == "reposcore") {
                 return h(
                   "div",
                   {
@@ -853,7 +996,7 @@ const fetchUserView = () => {
                 {
                   style: { padding: "5px 0" },
                 },
-                getContent(rowData, cellData)
+                getContent(rowData, cellData, cc.type)
               );
 
             if (cc.description) {
@@ -871,6 +1014,21 @@ const fetchUserView = () => {
               };
             }
             repos_table.columns.push(c);
+
+            // need to deepcopy the "c"
+            const groupByColumn: Column<any> = JSON.parse(JSON.stringify(c));
+            // special handling for group_by starts with "distinct_count_"
+            if (cc.group_by.startsWith("distinct_count_")) {
+              groupByColumn["cellRenderer"] = ({ rowData, cellData }) =>
+                h(
+                  "div",
+                  {
+                    style: { padding: "5px 0" },
+                  },
+                  getContent(rowData, cellData, "array")
+                );
+            }
+            groupBy_table.columns.push(groupByColumn);
           }
         }
 
@@ -1002,6 +1160,58 @@ const updateHook = (enabled: boolean) => {
   }
 };
 
+const groupBys = ["Repository", "Org", "Owner"];
+const groupBy = ref("Repository");
+const getDefaultGroupByColumns = (): Column<any>[] => [
+  {
+    title: "",
+    key: "row",
+    width: 80,
+    align: "center",
+    fixed: TableV2FixedDir.LEFT,
+    cellRenderer: ({ rowIndex }: any) => h("span", `${rowIndex + 1}`),
+  },
+  {
+    title: "Group By",
+    key: "group_by",
+    dataKey: "group_by",
+    width: 400,
+    sortable: true,
+    fixed: TableV2FixedDir.LEFT,
+  },
+];
+const groupBy_table = reactive({
+  rowKey: "id",
+  columns: getDefaultGroupByColumns(),
+  data: <any>[],
+  dataMap: new Map<string, Map<string, any>>(),
+  sortState: ref<SortBy>({
+    key: "group_by",
+    order: TableV2SortOrder.ASC,
+  }),
+  onSort: (sortBy: SortBy) => {
+    groupBy_table.data = useOrderBy(
+      groupBy_table.data,
+      [sortBy.key],
+      [sortBy.order]
+    );
+    groupBy_table.sortState = sortBy;
+  },
+  rowClass: ({ rowIndex }: Parameters<RowClassNameGetter<any>>[0]) => {
+    if (rowIndex % 2 === 1) {
+      return "zebra";
+    }
+    return "";
+  },
+});
+watch([groupBy], () => {
+  setTimeout(() => {
+    if (groupBy.value != "Responsitory") {
+      fetchRepos();
+    }
+  }, 0);
+});
+
 onMounted(() => {
   setupWebSocket();
   fetchAllColumns();
@@ -1023,6 +1233,7 @@ onMounted(() => {
             <UIcon name="i-fa6-solid-gear" />
           </el-button>
           <el-button
+            v-if="groupBy == 'Repository'"
             @click="exportToCSV"
             circle
             size="large"
@@ -1056,6 +1267,14 @@ onMounted(() => {
               <span class="actions">{{ item.label }}</span>
             </template>
           </UDropdown>
+          <USelect
+            :options="groupBys"
+            v-if="repos_table.selected.size == 0"
+            class="groupBy-button"
+            placeholder="Group By"
+            v-model="groupBy"
+          >
+          </USelect>
         </div>
         <div class="filters">
           <template
@@ -1083,6 +1302,7 @@ onMounted(() => {
           <el-auto-resizer>
             <template #default="{ height, width }">
               <el-table-v2
+                v-if="groupBy == 'Repository'"
                 :row-key="repos_table.rowKey"
                 :columns="repos_table.columns"
                 :data="repos_table.data"
@@ -1111,6 +1331,20 @@ onMounted(() => {
                     </el-icon>
                   </div>
                 </template>
+              </el-table-v2>
+
+              <el-table-v2
+                v-else
+                :row-key="groupBy_table.rowKey"
+                :columns="groupBy_table.columns"
+                :data="groupBy_table.data"
+                :width="width"
+                :height="height"
+                fixed
+                :sort-by="groupBy_table.sortState"
+                @column-sort="groupBy_table.onSort"
+                :row-class="groupBy_table.rowClass"
+              >
               </el-table-v2>
             </template>
           </el-auto-resizer>
@@ -1285,6 +1519,11 @@ onMounted(() => {
 }
 
 .actions-button {
+  float: right;
+  margin-top: 4px;
+}
+
+.groupBy-button {
   float: right;
   margin-top: 4px;
 }

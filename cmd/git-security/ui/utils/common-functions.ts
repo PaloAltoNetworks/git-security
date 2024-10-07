@@ -169,3 +169,14 @@ export const createFilter = (queryString:string) => {
     );
   };
 };
+
+export const dotGet = (obj: Record<string, any>, str: string): any => {
+  let s = str.split(".");
+  for (var i = 0; i < s.length; i++) {
+    obj = obj[s[i]];
+    if (obj == undefined) {
+      return undefined;
+    }
+  }
+  return obj;
+}

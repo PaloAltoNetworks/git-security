@@ -14,6 +14,7 @@ type ColumnConfig = {
   filter_expanded?: boolean;
   csv: boolean;
   order: string;
+  group_by: string;
 };
 
 const collapsed = ref<Record<string, boolean>>({});
@@ -304,6 +305,37 @@ onMounted(() => {
           >
             <template #prepend>Description</template>
           </el-input>
+        </div>
+        <div v-show="!collapsed[element.id]">
+          <el-select
+            v-model="element.group_by"
+            class="w-30 m-2"
+            placeholder="Calculated Field"
+            size="large"
+            @change="columnChanged(index)"
+          >
+            <template #prefix>Group By</template>
+            <el-option key="none" label="None" value="" />
+            <el-option key="sum" label="Sum" value="sum" />
+            <el-option key="avg" label="Avg" value="avg" />
+            <el-option key="min" label="Min" value="min" />
+            <el-option key="max" label="Max" value="max" />
+            <el-option
+              key="distinct_count_by_count"
+              label="Distinct Count"
+              value="distinct_count_by_count"
+            />
+            <el-option
+              key="distinct_count_by_name_asc"
+              label="Distinct Count By Name (ASC)"
+              value="distinct_count_by_name_asc"
+            />
+            <el-option
+              key="distinct_count_by_name_desc"
+              label="Distinct Count By Name (DESC)"
+              value="distinct_count_by_name_desc"
+            />
+          </el-select>
         </div>
       </el-card>
     </template>
