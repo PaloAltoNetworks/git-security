@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { showConfirmationDialog } from "@/common-functions";
 
+type GroupByColumnStyle = {
+  color: string;
+  value: string;
+  comparator: string;
+  arg: string;
+};
 type ColumnType = "string" | "number" | "boolean" | "array" | "date";
 type ColumnConfig = {
   id: string;
@@ -15,7 +21,25 @@ type ColumnConfig = {
   csv: boolean;
   order: string;
   group_by: string;
+  group_by_column_styles: GroupByColumnStyle[];
 };
+
+const predefineColors = ref([
+  "#ff4500",
+  "#ff8c00",
+  "#ffd700",
+  "#90ee90",
+  "#00ced1",
+  "#1e90ff",
+  "#c71585",
+  "rgba(255, 69, 0, 0.68)",
+  "rgb(255, 120, 0)",
+  "hsv(51, 100, 98)",
+  "hsva(120, 40, 94, 0.5)",
+  "hsl(181, 100%, 37%)",
+  "hsla(209, 100%, 56%, 0.73)",
+  "#c7158577",
+]);
 
 const collapsed = ref<Record<string, boolean>>({});
 
@@ -165,6 +189,26 @@ const addColumn = () => {
 const toggleCollapse = (id: string) => {
   collapsed.value[id] = !collapsed.value[id];
   sessionStorage.setItem(id, JSON.stringify(collapsed.value[id]));
+};
+
+const addGroupByColumnStyle = (index: number) => {
+  const c = columns.value[index];
+  if (c.group_by_column_styles == undefined) {
+    c.group_by_column_styles = [];
+  }
+  c.group_by_column_styles.push({
+    color: "",
+    value: "",
+    comparator: "",
+    arg: "",
+  });
+  columnChanged(index);
+};
+
+const removeGroupByColumnStyle = (index: number, j: number) => {
+  const c = columns.value[index];
+  c.group_by_column_styles.splice(j, 1);
+  columnChanged(index);
 };
 
 onMounted(() => {
@@ -337,6 +381,83 @@ onMounted(() => {
             />
           </el-select>
         </div>
+
+        <div v-show="!collapsed[element.id]">
+          <el-card class="style-card" shadow="never">
+            <template
+              #header
+              style="
+                 {
+                  margin: '10px';
+                }
+              "
+            >
+              <div class="style-card-header">
+                <span>Group By Column Styles</span>
+                <UButton
+                  class="style-add-button"
+                  icon="i-fa6-solid-plus"
+                  color="gray"
+                  variant="ghost"
+                  aria-label="Theme"
+                  @click="addGroupByColumnStyle(index)"
+                />
+              </div>
+            </template>
+            <div v-for="(cs, j) in element.group_by_column_styles">
+              <span class="label">Color:</span>
+              <el-color-picker
+                v-model="cs.color"
+                show-alpha
+                :predefine="predefineColors"
+                @change="columnChanged(index)"
+              />
+
+              <el-input
+                v-model="cs.value"
+                class="w-20 m-2"
+                size="large"
+                @change="columnChanged(index)"
+              >
+                <template #prepend>Value</template>
+              </el-input>
+
+              <el-select
+                v-model="cs.comparator"
+                class="w-10 m-2"
+                placeholder="Comparator"
+                size="large"
+                @change="columnChanged(index)"
+              >
+                <template #prefix>Comparator</template>
+                <el-option key="==" label="==" value="==" />
+                <el-option key=">=" label=">=" value=">=" />
+                <el-option key="<=" label="<=" value="<=" />
+                <el-option key=">" label=">" value=">" />
+                <el-option key="<" label="<" value="<" />
+                <el-option key="!=" label="!=" value="!=" />
+              </el-select>
+
+              <el-input
+                v-model="cs.arg"
+                class="w-40 m-2"
+                size="large"
+                @change="columnChanged(index)"
+              >
+                <template #prepend>Argument</template>
+              </el-input>
+
+              <UButton
+                class="style-delete-button"
+                icon="i-fa6-solid-xmark"
+                color="gray"
+                variant="ghost"
+                aria-label="Theme"
+                @click="removeGroupByColumnStyle(index, j)"
+              />
+            </div>
+          </el-card>
+        </div>
       </el-card>
     </template>
   </draggable>
@@ -395,5 +516,62 @@ onMounted(() => {
 
 .title {
   width: 100px;
+}
+
+.card-header {
+  font-weight: bold;
+}
+
+.style-card {
+  margin-left: 8px;
+  margin-top: 8px;
+  margin-bottom: 8px;
+  width: 92%;
+}
+
+.style-card-header {
+  margin-top: 10px;
+  font-size: 14px;
+}
+
+.style-card :deep(.el-card__header) {
+  background-color: var(--el-fill-color-light);
+  color: var(--el-color-info);
+  padding-top: 1px;
+  padding-bottom: 9px;
+  padding-left: 18px;
+}
+
+.style-card :deep(.el-card__body) {
+  padding: 0;
+}
+
+.style-add-button {
+  float: right;
+  margin-top: -5px;
+}
+
+.style-delete-button {
+  vertical-align: middle;
+}
+
+.w-10 {
+  width: 10%;
+}
+
+.w-20 {
+  width: 20%;
+}
+
+.w-40 {
+  width: 40%;
+}
+
+.w-60 {
+  width: 61%;
+}
+
+.m-2 {
+  margin: 0.5rem;
 }
 </style>

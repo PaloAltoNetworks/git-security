@@ -6,6 +6,7 @@ import {
   ElTooltip,
   TableV2FixedDir,
   TableV2SortOrder,
+  colorPickerContextKey,
 } from "element-plus";
 import type {
   CheckboxValueType,
@@ -24,6 +25,12 @@ import {
 } from "@/common-functions";
 import type { CellRendererParams } from "element-plus/es/components/table-v2/src/types.mjs";
 
+type GroupByColumnStyle = {
+  color: string;
+  value: string;
+  comparator: string;
+  arg: string;
+};
 type ColumnType =
   | "string"
   | "number"
@@ -44,6 +51,7 @@ type ColumnConfig = {
   csv: boolean;
   order: string;
   group_by: string;
+  group_by_column_styles: GroupByColumnStyle[];
 };
 
 const loading = ref(false);
@@ -191,21 +199,11 @@ const fetchRepos = () => {
         if (m) {
           let row: Record<string, any> = {
             group_by: `${key} (${m.get("_count") ?? 0})`,
+            bgcolors: {},
           };
           for (let id of uiData.selectedColumns) {
             let cc = uiData.allCCsMap[id];
-            if (
-              cc.group_by == "sum" ||
-              cc.group_by == "min" ||
-              cc.group_by == "max"
-            ) {
-              row[cc.key] = m.get(cc.key) ?? 0;
-            } else if (cc.group_by == "avg") {
-              // need to limit the result to 2 decimal places
-              row[cc.key] = Number(
-                (m.get(cc.key) ?? 0) / (m.get("_count") ?? 0)
-              ).toFixed(2);
-            } else if (cc.group_by.startsWith("distinct_count_")) {
+            if (cc.group_by.startsWith("distinct_count_")) {
               let distinctCountMap = m.get(cc.key) as Map<string, number>;
               let sortedDistinctCountList = Array.from(
                 distinctCountMap.entries()
@@ -232,6 +230,62 @@ const fetchRepos = () => {
               row[cc.key] = sortedDistinctCountList.map(
                 ([key, count]) => `${key} (${count})`
               );
+
+              // for distinctCountMap key and value to get the total
+              let totalCount = Array.from(distinctCountMap.values()).reduce(
+                (sum, value) => sum + value,
+                0
+              );
+
+              // add styles: loop through the cc.group_by_column_styles
+              for (let style of cc.group_by_column_styles ?? []) {
+                let count = distinctCountMap.get(style.value) ?? 0;
+                let arg = Number(style.arg);
+                // if arg < 1, treat it as percentage
+                if (arg < 1) {
+                  count = count / totalCount;
+                }
+                if (
+                  (style.comparator == ">" && count > arg) ||
+                  (style.comparator == ">=" && count >= arg) ||
+                  (style.comparator == "<" && count < arg) ||
+                  (style.comparator == "<=" && count <= arg) ||
+                  (style.comparator == "==" && count == arg) ||
+                  (style.comparator == "!=" && count != arg)
+                ) {
+                  row["bgcolors"][cc.key] = style.color;
+                  break;
+                }
+              }
+            } else {
+              if (
+                cc.group_by == "sum" ||
+                cc.group_by == "min" ||
+                cc.group_by == "max"
+              ) {
+                row[cc.key] = m.get(cc.key) ?? 0;
+              } else if (cc.group_by == "avg") {
+                // need to limit the result to 2 decimal places
+                row[cc.key] = Number(
+                  (m.get(cc.key) ?? 0) / (m.get("_count") ?? 0)
+                ).toFixed(2);
+              }
+
+              // add styles: loop through the cc.group_by_column_styles
+              for (let style of cc.group_by_column_styles ?? []) {
+                let arg = Number(style.arg);
+                if (
+                  (style.comparator == ">" && row[cc.key] > arg) ||
+                  (style.comparator == ">=" && row[cc.key] >= arg) ||
+                  (style.comparator == "<" && row[cc.key] < arg) ||
+                  (style.comparator == "<=" && row[cc.key] <= arg) ||
+                  (style.comparator == "==" && row[cc.key] == arg) ||
+                  (style.comparator == "!=" && row[cc.key] != arg)
+                ) {
+                  row["bgcolors"][cc.key] = style.color;
+                  break;
+                }
+              }
             }
           }
           groupBy_table.data.push(row);
@@ -894,7 +948,7 @@ const fetchUserView = () => {
 
       // give it a chance for the filters to refresh
       setTimeout(() => {
-        var uv = <UserView>response._data;
+        var uv = response._data as UserView;
         uiData.showArchived = uv.show_archived;
 
         for (const f of uv.filters) {
@@ -1018,14 +1072,26 @@ const fetchUserView = () => {
             // need to deepcopy the "c"
             const groupByColumn: Column<any> = JSON.parse(JSON.stringify(c));
             // special handling for group_by starts with "distinct_count_"
-            if (cc.group_by.startsWith("distinct_count_")) {
-              groupByColumn["cellRenderer"] = ({ rowData, cellData }) =>
+            if (cc.group_by) {
+              groupByColumn["cellRenderer"] = ({ rowData, cellData, column }) =>
                 h(
                   "div",
                   {
-                    style: { padding: "5px 0" },
+                    style: {
+                      padding: "5px 0",
+                      backgroundColor:
+                        rowData["bgcolors"] && column.dataKey
+                          ? rowData["bgcolors"][column.dataKey]
+                          : "",
+                    },
                   },
-                  getContent(rowData, cellData, "array")
+                  getContent(
+                    rowData,
+                    cellData,
+                    cc.group_by.startsWith("distinct_count_")
+                      ? "array"
+                      : cc.type
+                  )
                 );
             }
             groupBy_table.columns.push(groupByColumn);
@@ -1037,7 +1103,6 @@ const fetchUserView = () => {
     },
   });
 };
-
 const filtersCheckedChange = (checked: any) => {
   uiData.checkedFilters = checked;
 };
